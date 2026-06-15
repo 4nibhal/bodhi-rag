@@ -44,7 +44,7 @@ dependencies = [
     "chromadb==1.5.9",
 
     # OpenAI client
-    "openai==2.41.0",
+    "openai==2.41.1",
 
     # Evaluation
     "numpy==2.4.6",
