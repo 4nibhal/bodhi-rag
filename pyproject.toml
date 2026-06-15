@@ -65,7 +65,7 @@ telemetry = [
 # dep tree pulls in torch (~hundreds of MB) and most users do not need
 # the cross-encoder provider; the noop provider is the default.
 cross-encoder = [
-    "sentence-transformers==3.2.1",
+    "sentence-transformers==5.5.1",
 ]
 
 # All optional dependencies
