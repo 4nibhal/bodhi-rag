@@ -8,7 +8,7 @@ and other service logic. Policies are stateless and contain pure business logic.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import PurePath
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +65,8 @@ class GenerationPolicy:
 
     def map_role(self, role: str) -> str:
         """Map a legacy role to a model-native role."""
-        return self.role_mapping.get(role, "user")  # type: ignore[arg-type]
+        mapping = self.role_mapping or {}
+        return mapping.get(role, "user")
 
     def should_summarize_prompt(self, token_count: int) -> bool:
         """Determine if the prompt should be summarized based on token count."""
@@ -104,6 +105,42 @@ class ContextAssemblyPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class IndexingTarget:
+    """Filesystem facts supplied by an adapter for indexing policy checks."""
+
+    path: str
+    exists: bool
+    is_dir: bool
+    size_bytes: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.exists and self.is_dir:
+            msg = "Non-existent indexing targets cannot be directories"
+            raise ValueError(msg)
+        if self.is_dir and self.size_bytes is not None:
+            msg = "Directory indexing targets must not include a file size"
+            raise ValueError(msg)
+        if self.size_bytes is not None and self.size_bytes < 0:
+            msg = "Indexing target size must be non-negative"
+            raise ValueError(msg)
+
+    @property
+    def is_absolute(self) -> bool:
+        """Return whether the declared path is absolute."""
+        return PurePath(self.path).is_absolute()
+
+    @property
+    def suffix(self) -> str:
+        """Return the normalized file extension for the declared path."""
+        return PurePath(self.path).suffix.lower()
+
+    @property
+    def is_file(self) -> bool:
+        """Return whether the supplied facts describe a file."""
+        return self.exists and not self.is_dir
+
+
+@dataclass(frozen=True, slots=True)
 class IndexingPolicy:
     """
     Policy governing document indexing behavior.
@@ -115,27 +152,27 @@ class IndexingPolicy:
     max_file_size_mb: int = 100
     require_absolute_path: bool = True
 
-    def is_valid_path(self, path: str) -> bool:
+    def is_valid_target(self, target: IndexingTarget) -> bool:
         """
-        Validate that a document path meets indexing requirements.
+        Validate that supplied indexing facts meet policy requirements.
 
         For directories, only checks existence and absolute path requirement.
         For files, also checks the allowed extensions.
         """
-        p = Path(path)
-        if self.require_absolute_path and not p.is_absolute():
+        if self.require_absolute_path and not target.is_absolute:
             return False
-        if not p.exists():
+        if not target.exists:
             return False
-        # Directories are always valid (they contain files, not single file)
-        if p.is_dir():
+        if target.is_dir:
             return True
-        return p.suffix.lower() in self.allowed_extensions
+        return target.suffix in self.allowed_extensions
 
-    def validate_file_size(self, path: str) -> bool:
+    def validate_file_size(self, target: IndexingTarget) -> bool:
         """Check if a file is within the allowed size limit."""
-        p = Path(path)
-        if not p.is_file():
-            return True  # Directories don't have a single file size
-        size_mb = p.stat().st_size / (1024 * 1024)
+        if not target.is_file:
+            return True
+        if target.size_bytes is None:
+            msg = "File indexing targets must include size_bytes"
+            raise ValueError(msg)
+        size_mb = target.size_bytes / (1024 * 1024)
         return size_mb <= self.max_file_size_mb

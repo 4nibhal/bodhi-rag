@@ -7,8 +7,6 @@ These are not the application services but pure domain logic coordinators.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from bodhi_rag.domain.exceptions import (
     DocumentIntegrityError,
     PolicyViolationError,
@@ -16,11 +14,9 @@ from bodhi_rag.domain.exceptions import (
 from bodhi_rag.domain.policies import (
     ContextAssemblyPolicy,
     IndexingPolicy,
+    IndexingTarget,
     RetrievalPolicy,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class RetrievalDomainService:
@@ -107,25 +103,22 @@ class IndexingDomainService:
     def indexing_policy(self) -> IndexingPolicy:
         return self._indexing_policy
 
-    def validate_path(self, path: str | Path) -> None:
+    def validate_path(self, target: IndexingTarget) -> None:
         """
-        Validate that a document path meets indexing policy requirements.
+        Validate that indexing facts meet policy requirements.
 
         Raises:
-            PolicyViolationError: If the path does not meet policy requirements.
+            PolicyViolationError: If the target does not meet policy requirements.
 
         """
-        path_str = str(path)
-        if not self._indexing_policy.is_valid_path(path_str):
+        if not self._indexing_policy.is_valid_target(target):
             msg = (
-                f"Document path does not meet indexing policy requirements: {path_str}. "
+                f"Document path does not meet indexing policy requirements: {target.path}. "
                 f"Allowed extensions: {self._indexing_policy.allowed_extensions}"
             )
-            raise PolicyViolationError(
-                msg,
-            )
+            raise PolicyViolationError(msg)
 
-    def validate_file_size(self, path: str | Path) -> None:
+    def validate_file_size(self, target: IndexingTarget) -> None:
         """
         Validate that a file is within the allowed size limit.
 
@@ -133,23 +126,20 @@ class IndexingDomainService:
             PolicyViolationError: If the file exceeds size limits.
 
         """
-        path_str = str(path)
-        if not self._indexing_policy.validate_file_size(path_str):
+        if not self._indexing_policy.validate_file_size(target):
             msg = (
                 f"File exceeds maximum size limit of "
-                f"{self._indexing_policy.max_file_size_mb}MB: {path_str}"
+                f"{self._indexing_policy.max_file_size_mb}MB: {target.path}"
             )
-            raise PolicyViolationError(
-                msg,
-            )
+            raise PolicyViolationError(msg)
 
-    def validate_index_request(self, path: str | Path) -> None:
+    def validate_index_request(self, target: IndexingTarget) -> None:
         """
-        Perform all indexing policy validations for a path.
+        Perform all indexing policy validations for supplied target facts.
 
         Raises:
             PolicyViolationError: If any policy requirement is not met.
 
         """
-        self.validate_path(path)
-        self.validate_file_size(path)
+        self.validate_path(target)
+        self.validate_file_size(target)

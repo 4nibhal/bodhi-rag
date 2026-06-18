@@ -18,10 +18,11 @@ from bodhi_rag.application.models import (
 if TYPE_CHECKING:
     from bodhi_rag.answering.application.synthesize import SynthesizeAnswerUseCase
     from bodhi_rag.conversation.application.memory import ConversationMemoryUseCase
-    from bodhi_rag.domain.entities import ConversationTurn, RetrievedDocument
+    from bodhi_rag.domain.entities import ConversationTurn
     from bodhi_rag.domain.value_objects import ConversationId, DocumentId
     from bodhi_rag.indexing.application.delete import DeleteDocumentUseCase
     from bodhi_rag.indexing.application.index import IndexDocumentUseCase
+    from bodhi_rag.ports.vector_store import RetrievedDocument
     from bodhi_rag.retrieval.application.retrieve import RetrieveQueryUseCase
 
 
@@ -37,19 +38,6 @@ RESERVED_PROVENANCE_KEYS = frozenset(
         "subject",
     },
 )
-
-
-def _merge_document_metadata(
-    parser_metadata: dict[str, Any],
-    request_metadata: dict[str, Any],
-) -> dict[str, Any]:
-    merged = dict(parser_metadata)
-    for key, value in request_metadata.items():
-        if key in RESERVED_PROVENANCE_KEYS:
-            merged[f"user_{key}"] = value
-            continue
-        merged[key] = value
-    return merged
 
 
 def _merge_document_metadata(

@@ -7,8 +7,10 @@ This is the new Container that works with the Protocol-based ports.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import os
+from typing import TYPE_CHECKING, Final, TypeVar, cast
 
+from bodhi_rag.application.config import BhodiConfig, EmbeddingConfig, LLMConfig
 from bodhi_rag.conversation.ports.memory import ConversationMemoryPort
 from bodhi_rag.ports.chunker import ChunkerPort
 from bodhi_rag.ports.document_parser import DocumentParserPort
@@ -20,8 +22,30 @@ from bodhi_rag.ports.vector_store import VectorStorePort
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from bodhi_rag.application.config import BhodiConfig
     from bodhi_rag.application.facade import BhodiApplication
+
+
+OpenAIConfigT = TypeVar("OpenAIConfigT", EmbeddingConfig, LLMConfig)
+
+
+OPENAI_COMPATIBLE_PROVIDER_ALIASES: Final[frozenset[str]] = frozenset(
+    {
+        "openai",
+        "openai-compatible",
+        "openai_compatible",
+        "lmstudio",
+        "lm_studio",
+        "openrouter",
+        "vllm",
+    },
+)
+
+
+def _resolve_openai_compatible_provider_family(provider: str) -> str:
+    normalized = provider.strip().lower()
+    if normalized in OPENAI_COMPATIBLE_PROVIDER_ALIASES:
+        return "openai"
+    return normalized
 
 
 class Container:
@@ -80,30 +104,39 @@ class Container:
             RetrieveQueryUseCase,
         )
 
-        return BhodiApplication(
-            index_document=IndexDocumentUseCase(
-                document_parser=self._get_adapter(DocumentParserPort),
-                chunker=self._get_adapter(ChunkerPort),
-                embedding=self._get_adapter(EmbeddingPort),
-                vector_store=self._get_adapter(VectorStorePort),
-            ),
-            delete_document=DeleteDocumentUseCase(
-                vector_store=self._get_adapter(VectorStorePort),
-            ),
-            retrieve_query=RetrieveQueryUseCase(
-                embedding=self._get_adapter(EmbeddingPort),
-                vector_store=self._get_adapter(VectorStorePort),
-                reranker=self._get_adapter(RerankerPort),
-            ),
-            synthesize_answer=SynthesizeAnswerUseCase(
-                llm=self._get_adapter(LLMPort),
-            ),
-            conversation_memory=ConversationMemoryUseCase(
-                self._get_adapter(ConversationMemoryPort),
-            ),
+        document_parser = cast("DocumentParserPort", self._get_adapter(DocumentParserPort))
+        chunker = cast("ChunkerPort", self._get_adapter(ChunkerPort))
+        embedding = cast("EmbeddingPort", self._get_adapter(EmbeddingPort))
+        vector_store = cast("VectorStorePort", self._get_adapter(VectorStorePort))
+        reranker = cast("RerankerPort", self._get_adapter(RerankerPort))
+        llm = cast("LLMPort", self._get_adapter(LLMPort))
+        conversation_memory = cast(
+            "ConversationMemoryPort",
+            self._get_adapter(ConversationMemoryPort),
         )
 
-    def _get_adapter(self, port_type: type) -> object:
+        return BhodiApplication(
+            index_document=IndexDocumentUseCase(
+                document_parser=document_parser,
+                chunker=chunker,
+                embedding=embedding,
+                vector_store=vector_store,
+            ),
+            delete_document=DeleteDocumentUseCase(
+                vector_store=vector_store,
+            ),
+            retrieve_query=RetrieveQueryUseCase(
+                embedding=embedding,
+                vector_store=vector_store,
+                reranker=reranker,
+            ),
+            synthesize_answer=SynthesizeAnswerUseCase(
+                llm=llm,
+            ),
+            conversation_memory=ConversationMemoryUseCase(conversation_memory),
+        )
+
+    def _get_adapter(self, port_type: type[object]) -> object:
         """Get or create adapter for given port type."""
         if port_type not in self._adapters:
             factory_name = f"_create_{port_type.__name__.replace('Port', '').lower()}_adapter"
@@ -118,7 +151,9 @@ class Container:
         """Create embedding adapter based on config."""
         from bodhi_rag.infrastructure.embedding.mock import MockEmbeddingAdapter
 
-        provider = self._config.embedding.provider.lower()
+        provider = _resolve_openai_compatible_provider_family(
+            self._config.embedding.provider,
+        )
 
         if provider == "mock":
             return MockEmbeddingAdapter(self._config.embedding)
@@ -128,7 +163,9 @@ class Container:
                 OpenAIEmbeddingsAdapter,
             )
 
-            return OpenAIEmbeddingsAdapter(self._config.embedding)
+            return OpenAIEmbeddingsAdapter(
+                self._with_openai_api_key(self._config.embedding),
+            )
 
         msg = f"Unknown embedding provider: {provider}"
         raise ValueError(msg)
@@ -199,7 +236,7 @@ class Container:
         """Create LLM adapter based on config."""
         from bodhi_rag.infrastructure.llm.mock import MockLLMAdapter
 
-        provider = self._config.llm.provider.lower()
+        provider = _resolve_openai_compatible_provider_family(self._config.llm.provider)
 
         if provider == "mock":
             return MockLLMAdapter(self._config.llm)
@@ -212,7 +249,7 @@ class Container:
         if provider == "openai":
             from bodhi_rag.infrastructure.llm.openai import OpenAILLMAdapter
 
-            return OpenAILLMAdapter(self._config.llm)
+            return OpenAILLMAdapter(self._with_openai_api_key(self._config.llm))
 
         msg = f"Unknown llm provider: {provider}"
         raise ValueError(msg)
@@ -248,3 +285,17 @@ class Container:
 
         msg = f"Unknown reranker provider: {provider}"
         raise ValueError(msg)
+
+    def _with_openai_api_key(self, config: OpenAIConfigT) -> OpenAIConfigT:
+        """Inject a resolved OpenAI API key into adapter config."""
+        extra = getattr(config, "extra", {})
+        api_key = extra.get("api_key") or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            provider = getattr(config, "provider", "openai")
+            msg = (
+                f"OpenAI credentials required for provider '{provider}'. "
+                "Set OPENAI_API_KEY or provide extra.api_key in config."
+            )
+            raise ValueError(msg)
+        updated = config.model_copy(update={"extra": {**extra, "api_key": api_key}})
+        return cast("OpenAIConfigT", updated)

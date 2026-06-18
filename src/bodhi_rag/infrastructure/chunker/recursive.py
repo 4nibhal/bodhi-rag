@@ -177,7 +177,7 @@ class RecursiveChunkerAdapter:
             ]
 
         # Recursive split → merge → apply overlap
-        splits = self._split_recursively(stripped, self.SEPARATORS)
+        splits = self._split_recursively(stripped, list(self.SEPARATORS))
         chunks_text = self._merge_splits(splits, size)
 
         if ov > 0:

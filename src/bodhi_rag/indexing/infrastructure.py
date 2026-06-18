@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from bodhi_rag.indexing.ports import DocumentLoader
@@ -11,31 +11,35 @@ PDF_GLOB = "**/*.pdf"
 
 
 def _directory_loader_class() -> Any:
-    from langchain_community.document_loaders import DirectoryLoader
+    from langchain_community.document_loaders import (  # type: ignore[import-not-found]
+        DirectoryLoader,
+    )
 
     return DirectoryLoader
 
 
 def _pdf_loader_class() -> Any:
-    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_community.document_loaders import PyPDFLoader  # type: ignore[import-not-found]
 
     return PyPDFLoader
 
 
 def _text_loader_class() -> Any:
-    from langchain_community.document_loaders import TextLoader
+    from langchain_community.document_loaders import TextLoader  # type: ignore[import-not-found]
 
     return TextLoader
 
 
 def _splitter_class() -> Any:
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    from langchain.text_splitter import (  # type: ignore[import-not-found]
+        RecursiveCharacterTextSplitter,
+    )
 
     return RecursiveCharacterTextSplitter
 
 
 def _vectorstore_class() -> Any:
-    from langchain_chroma import Chroma
+    from langchain_chroma import Chroma  # type: ignore[import-not-found]
 
     return Chroma
 
@@ -67,8 +71,8 @@ def load_documents_from_directory(directory_path: str) -> list[Any]:
 
 def build_file_loader(file_path: str) -> DocumentLoader:
     if file_path.lower().endswith(".pdf"):
-        return _pdf_loader_class()(file_path)
-    return _text_loader_class()(file_path)
+        return cast("DocumentLoader", _pdf_loader_class()(file_path))
+    return cast("DocumentLoader", _text_loader_class()(file_path))
 
 
 def load_documents_from_file(file_path: str) -> list[Any]:

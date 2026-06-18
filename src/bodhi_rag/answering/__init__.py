@@ -2,11 +2,9 @@
 Answer synthesis bounded context.
 
 Owns the responsibility of producing the final natural-language
-response that the user sees. Currently the use case is a thin
-delegation to `LLMPort.generate_with_context`; the bounded context
-shape exists so future waves can add citation extraction, answer
-post-processing, streaming, or guardrails without leaking into the
-retrieval flow or the LLM adapters.
+response that the user sees. The application layer assembles
+message-oriented LLM requests so grounding behavior can evolve
+without leaking prompt construction into provider adapters.
 
 Hexagonal layout:
 

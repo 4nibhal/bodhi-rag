@@ -6,10 +6,12 @@ Defines the contract for document parsing adapters.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import BinaryIO, Protocol
+from typing import TYPE_CHECKING, BinaryIO, Protocol
 
-from bodhi_rag.domain.entities import Document
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from bodhi_rag.domain.entities import Document
 
 
 class DocumentParserPort(Protocol):
@@ -35,6 +37,7 @@ class DocumentParserPort(Protocol):
 
         Raises:
             InvalidDocumentError: If document cannot be parsed.
+
         """
         ...
 
@@ -53,6 +56,7 @@ class DocumentParserPort(Protocol):
 
         Raises:
             InvalidDocumentError: If text extraction fails.
+
         """
         ...
 
@@ -71,5 +75,6 @@ class DocumentParserPort(Protocol):
 
         Raises:
             InvalidDocumentError: If metadata extraction fails.
+
         """
         ...

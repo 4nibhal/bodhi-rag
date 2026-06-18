@@ -5,11 +5,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
-from bodhi_rag.application.config import BhodiConfig
+from bodhi_rag.application.config_loader import load_bodhi_config
 from bodhi_rag.application.models import QueryRequest
 from bodhi_rag.infrastructure.container import Container
+
+if TYPE_CHECKING:
+    from bodhi_rag.application.config import BhodiConfig
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,13 +48,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def run_query(
     question: str,
+    config: BhodiConfig | None = None,
     conversation_id: str | None = None,
     top_k: int = 5,
     temperature: float = 0.7,
 ) -> str:
     """Run query operation and return result string."""
-    config = BhodiConfig()
-    container = Container(config)
+    resolved_config = config or load_bodhi_config()
+    container = Container(resolved_config)
     app = container.build()
 
     request = QueryRequest(
@@ -82,6 +86,7 @@ async def run_query(
 def main(
     argv: list[str] | None = None,
     *,
+    config: BhodiConfig | None = None,
     stdout: TextIO | None = None,
 ) -> None:
     """CLI entry point."""
@@ -91,6 +96,7 @@ def main(
     result = asyncio.run(
         run_query(
             question=args.question,
+            config=config,
             conversation_id=args.conversation_id,
             top_k=args.top_k,
             temperature=args.temperature,

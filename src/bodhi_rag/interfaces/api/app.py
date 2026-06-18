@@ -7,12 +7,11 @@ Creates and configures the Bodhi RAG API server.
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
@@ -22,10 +21,11 @@ if TYPE_CHECKING:
 
     from fastapi.responses import Response
 
+    from bodhi_rag.application.config import BhodiConfig
     from bodhi_rag.application.facade import BhodiApplication
 
 from bodhi_rag._version import get_version
-from bodhi_rag.application.config import BhodiConfig
+from bodhi_rag.application.config_loader import load_bodhi_config
 from bodhi_rag.infrastructure.container import Container
 
 if TYPE_CHECKING:
@@ -33,7 +33,6 @@ if TYPE_CHECKING:
 
     from bodhi_rag.application.facade import BhodiApplication
 
-API_SOURCE_ROOT_ENV = "BODHI_API_SOURCE_ROOT"
 API_ALLOWED_SOURCE_SUFFIXES = frozenset({".pdf", ".txt", ".md", ".rst"})
 
 
@@ -43,9 +42,9 @@ class ApiSourcePolicy:
     allowed_suffixes: frozenset[str] = API_ALLOWED_SOURCE_SUFFIXES
 
 
-def _load_api_source_policy() -> ApiSourcePolicy:
-    configured_root = os.getenv(API_SOURCE_ROOT_ENV)
-    if not configured_root:
+def _load_api_source_policy(config: BhodiConfig) -> ApiSourcePolicy:
+    configured_root = config.api.source_root
+    if configured_root is None:
         return ApiSourcePolicy(root=None)
     return ApiSourcePolicy(root=Path(configured_root).expanduser().resolve())
 
@@ -102,10 +101,10 @@ def create_app(config: BhodiConfig | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         """Initialize and tear down the application state."""
-        cfg = config or BhodiConfig()
+        cfg = config or load_bodhi_config()
         container = Container(cfg)
         _state["bodhi_rag_app"] = container.build()
-        _state["source_policy"] = _load_api_source_policy()
+        _state["source_policy"] = _load_api_source_policy(cfg)
         try:
             yield
         finally:
@@ -152,7 +151,7 @@ def get_bodhi_rag_app() -> BhodiApplication:
     if app is None:
         msg = "Application not initialized"
         raise RuntimeError(msg)
-    return app
+    return cast("BhodiApplication", app)
 
 
 def get_api_source_policy() -> ApiSourcePolicy:
@@ -161,4 +160,4 @@ def get_api_source_policy() -> ApiSourcePolicy:
     if policy is None:
         msg = "Application not initialized"
         raise RuntimeError(msg)
-    return policy
+    return cast("ApiSourcePolicy", policy)

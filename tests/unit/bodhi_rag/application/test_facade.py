@@ -26,37 +26,28 @@ def _build_app(
     retrieve_query: AsyncMock | None = None,
     synthesize_answer: AsyncMock | None = None,
     conversation_memory: AsyncMock | None = None,
-    # Legacy port args — kept for backwards compat with pre-F5-C tests
-    # that pass them. The facade no longer consumes them; they are
-    # ignored. New tests should pass use cases.
-    embedding: AsyncMock | None = None,  # noqa: ARG001
-    vector_store: AsyncMock | None = None,  # noqa: ARG001
-    chunker: AsyncMock | None = None,  # noqa: ARG001
-    document_parser: AsyncMock | None = None,  # noqa: ARG001
-    llm: AsyncMock | None = None,  # noqa: ARG001
-    reranker: AsyncMock | None = None,  # noqa: ARG001
 ) -> BhodiApplication:
     def _make_passthrough_retrieve() -> AsyncMock:
-        m = AsyncMock()
+        mock = AsyncMock()
 
         async def _execute(_question: str, _top_k: int) -> list[RetrievedDocument]:
             return []
 
-        m.execute.side_effect = _execute
-        return m
+        mock.execute.side_effect = _execute
+        return mock
 
     def _make_passthrough_synthesize() -> AsyncMock:
-        m = AsyncMock()
-        m.execute.return_value = "Answer"
-        return m
+        mock = AsyncMock()
+        mock.execute.return_value = "Answer"
+        return mock
 
     def _make_passthrough_conversation_memory() -> AsyncMock:
-        m = AsyncMock()
-        m.get_history.return_value = []
-        return m
+        mock = AsyncMock()
+        mock.get_history.return_value = []
+        return mock
 
     def _make_passthrough_index() -> AsyncMock:
-        m = AsyncMock()
+        mock = AsyncMock()
 
         async def _execute(_request: IndexDocumentRequest) -> IndexDocumentResponse:
             return IndexDocumentResponse(
@@ -64,8 +55,8 @@ def _build_app(
                 chunk_count=1,
             )
 
-        m.execute.side_effect = _execute
-        return m
+        mock.execute.side_effect = _execute
+        return mock
 
     return BhodiApplication(
         index_document=index_document or _make_passthrough_index(),
@@ -119,10 +110,6 @@ async def test_index_document_preserves_document_identity_and_merges_metadata() 
     embedding.embed_documents.return_value = [[0.1, 0.2], [0.3, 0.4]]
     vector_store = AsyncMock()
 
-    # F5-C: facade delegates index_document to IndexDocumentUseCase.
-    # Build a real use case with the test's port mocks so the
-    # pipeline under test runs the same way it did when the logic
-    # was inline in the facade.
     index_use_case = IndexDocumentUseCase(
         document_parser=parser,
         chunker=chunker,
@@ -178,27 +165,12 @@ async def test_query_uses_human_provenance_in_citations() -> None:
         metadata={"filename": "doc.pdf", "page": "7"},
     )
 
-    embedding = AsyncMock()
-    embedding.embed_query.return_value = [0.1, 0.2]
-    vector_store = AsyncMock()
-    vector_store.search.return_value = [retrieved]
-    llm = AsyncMock()
-    llm.generate_with_context.return_value = "Answer"
-
-    # F5-B: the facade delegates to the retrieval and answer-synthesis
-    # use cases. The legacy port-level mocks are no longer consulted;
-    # mock the use cases directly. The vector_store/llm mocks are
-    # kept here only as documentation of what the use cases would
-    # call under the hood.
     retrieve_query = AsyncMock()
     retrieve_query.execute.return_value = [retrieved]
     synthesize_answer = AsyncMock()
     synthesize_answer.execute.return_value = "Answer"
 
     app = _build_app(
-        embedding=embedding,
-        vector_store=vector_store,
-        llm=llm,
         retrieve_query=retrieve_query,
         synthesize_answer=synthesize_answer,
     )
@@ -213,25 +185,13 @@ async def test_query_uses_human_provenance_in_citations() -> None:
 @pytest.mark.asyncio
 async def test_health_check_is_non_invasive() -> None:
     """Health checks should not invoke external adapters."""
-    embedding = AsyncMock()
-    embedding.embed_query.side_effect = AssertionError("should not be called")
-    vector_store = AsyncMock()
-    vector_store.persist.side_effect = AssertionError("should not be called")
-    llm = AsyncMock()
-    llm.generate.side_effect = AssertionError("should not be called")
-
-    app = _build_app(embedding=embedding, vector_store=vector_store, llm=llm)
+    app = _build_app()
 
     health = await app.health_check()
 
     assert health.status == "healthy"
     assert health.version == get_version()
     assert health.services == {"embedding": True, "vector_store": True, "llm": True}
-    embedding.embed_query.assert_not_called()
-    vector_store.persist.assert_not_called()
-
-
-# --- Wave 3b / F5-B: reranker integration through use cases -------------
 
 
 @pytest.mark.asyncio
@@ -267,18 +227,15 @@ async def test_query_overfetches_then_reranks_then_trims_to_top_k() -> None:
 
     response = await app.query(QueryRequest(question="q", top_k=2))
 
-    # The retrieval use case must be called with (question, top_k).
     retrieve_query.execute.assert_awaited_once_with("q", 2)
 
-    # The answer synthesis use case must receive the retrieved (reranked) list.
     args, kwargs = synthesize_answer.execute.await_args
     assert args[0] == "q"
     assert args[1] == reranked
-    assert kwargs["temperature"] == 0.7  # QueryRequest default
+    assert kwargs["temperature"] == 0.7
 
-    # The response uses the synthesized text and reranked citations.
     assert response.answer_text == "promoted answer"
-    assert [c.text for c in response.citations] == ["chunk 5", "chunk 2"]
+    assert [citation.text for citation in response.citations] == ["chunk 5", "chunk 2"]
 
 
 @pytest.mark.asyncio

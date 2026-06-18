@@ -6,9 +6,10 @@ Defines the contract for text chunking adapters.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from bodhi_rag.domain.entities import Chunk
+if TYPE_CHECKING:
+    from bodhi_rag.domain.entities import Chunk
 
 
 class ChunkerPort(Protocol):
@@ -38,19 +39,16 @@ class ChunkerPort(Protocol):
 
         Raises:
             ChunkingError: If chunking fails.
+
         """
         ...
 
     @property
     def default_chunk_size(self) -> int:
-        """
-        Return the default chunk size for this chunker.
-        """
+        """Return the default chunk size for this chunker."""
         ...
 
     @property
     def default_overlap(self) -> int:
-        """
-        Return the default overlap for this chunker.
-        """
+        """Return the default overlap for this chunker."""
         ...

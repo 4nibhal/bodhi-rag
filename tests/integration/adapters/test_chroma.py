@@ -4,25 +4,32 @@ Integration tests for Chroma vector store adapter.
 Requires chromadb package to be installed.
 """
 
-import pytest
+from __future__ import annotations
+
+import pathlib
 import tempfile
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+import pytest
 
 from bodhi_rag.application.config import VectorStoreConfig
-from bodhi_rag.infrastructure.vector_store.chroma import ChromaVectorStoreAdapter
 from bodhi_rag.domain.entities import Chunk
 from bodhi_rag.domain.value_objects import ChunkId, DocumentId
+from bodhi_rag.infrastructure.vector_store.chroma import ChromaVectorStoreAdapter
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 @pytest.fixture
-def temp_dir():
+def temp_dir() -> Iterator[pathlib.Path]:
     """Create a temporary directory for Chroma persistence."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+        yield pathlib.Path(tmpdir)
 
 
 @pytest.fixture
-def chroma_adapter(temp_dir):
+def chroma_adapter(temp_dir: pathlib.Path) -> ChromaVectorStoreAdapter:
     """Create a Chroma adapter with temporary directory."""
     config = VectorStoreConfig(
         provider="chroma",
@@ -33,7 +40,7 @@ def chroma_adapter(temp_dir):
 
 
 @pytest.mark.asyncio
-async def test_add_and_search(chroma_adapter):
+async def test_add_and_search(chroma_adapter: ChromaVectorStoreAdapter) -> None:
     """Test adding chunks and searching."""
     doc_id = DocumentId()
     chunk_id = ChunkId(document_id=doc_id, chunk_index=0)
@@ -46,7 +53,7 @@ async def test_add_and_search(chroma_adapter):
         total_chunks=1,
     )
 
-    embedding = [0.1] * 128  # Mock embedding
+    embedding = [0.1] * 128
 
     await chroma_adapter.add([chunk], [embedding])
 
@@ -58,7 +65,7 @@ async def test_add_and_search(chroma_adapter):
 
 
 @pytest.mark.asyncio
-async def test_delete(chroma_adapter):
+async def test_delete(chroma_adapter: ChromaVectorStoreAdapter) -> None:
     """Test deleting a document."""
     doc_id = DocumentId()
     chunk_id = ChunkId(document_id=doc_id, chunk_index=0)
@@ -75,32 +82,28 @@ async def test_delete(chroma_adapter):
 
     await chroma_adapter.add([chunk], [embedding])
 
-    # Verify it exists
     results = await chroma_adapter.search(embedding, top_k=1)
     assert len(results) == 1
 
-    # Delete
     await chroma_adapter.delete(doc_id)
 
-    # Should not find it anymore
     results = await chroma_adapter.search(embedding, top_k=1)
     assert len(results) == 0
 
 
 @pytest.mark.asyncio
-async def test_persist(chroma_adapter):
+async def test_persist(chroma_adapter: ChromaVectorStoreAdapter) -> None:
     """Test that persist doesn't error."""
-    # Persist should be a no-op for Chroma with PersistentClient
     await chroma_adapter.persist()
 
 
 @pytest.mark.asyncio
-async def test_multiple_chunks(chroma_adapter):
+async def test_multiple_chunks(chroma_adapter: ChromaVectorStoreAdapter) -> None:
     """Test adding and searching multiple chunks."""
     doc_id = DocumentId()
 
-    chunks = []
-    embeddings = []
+    chunks: list[Chunk] = []
+    embeddings: list[list[float]] = []
     for i in range(3):
         chunk_id = ChunkId(document_id=doc_id, chunk_index=i)
         chunk = Chunk(

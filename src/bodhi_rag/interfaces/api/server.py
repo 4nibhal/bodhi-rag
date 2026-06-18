@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import os
 
 import uvicorn
 
 from bodhi_rag.application.config import ConfigError
 from bodhi_rag.application.config_loader import load_bodhi_config
+from bodhi_rag.interfaces.api.app import create_app
 
 
 def main() -> None:
@@ -16,28 +16,33 @@ def main() -> None:
     parser.add_argument(
         "--host",
         type=str,
-        default=os.getenv("BODHI_API_HOST", "127.0.0.1"),
+        default=None,
         help="Host to bind (default: 127.0.0.1)",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("BODHI_API_PORT", "8000")),
+        default=None,
         help="Port to bind (default: 8000)",
     )
     args = parser.parse_args()
 
-    # Validate the TOML config (if configured) at startup so the server
-    # fails fast with a clear error rather than at the first request.
+    cli_overrides = {
+        "api": {
+            key: value
+            for key, value in (("host", args.host), ("port", args.port))
+            if value is not None
+        },
+    }
+
     try:
-        load_bodhi_config()
+        config = load_bodhi_config(cli_overrides=cli_overrides)
     except ConfigError as exc:
         msg = f"Config error: {exc}"
         raise SystemExit(msg) from exc
 
     uvicorn.run(
-        "bodhi_rag.interfaces.api.app:create_app",
-        factory=True,
-        host=args.host,
-        port=args.port,
+        create_app(config),
+        host=config.api.host,
+        port=config.api.port,
     )

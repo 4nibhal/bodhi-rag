@@ -9,9 +9,12 @@ into callers.
 
 from __future__ import annotations
 
-from bodhi_rag.conversation.ports.memory import ConversationMemoryPort
-from bodhi_rag.domain.entities import ConversationTurn
-from bodhi_rag.domain.value_objects import ConversationId
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bodhi_rag.conversation.ports.memory import ConversationMemoryPort
+    from bodhi_rag.domain.entities import ConversationTurn
+    from bodhi_rag.domain.value_objects import ConversationId
 
 
 class ConversationMemoryUseCase:

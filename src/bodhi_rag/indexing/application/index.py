@@ -14,6 +14,7 @@ logging, error mapping) belong here.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bodhi_rag.application.models import IndexDocumentResponse
@@ -61,7 +62,8 @@ class IndexDocumentUseCase:
         request: IndexDocumentRequest,
     ) -> IndexDocumentResponse:
         """Run the full indexing pipeline for `request.source`."""
-        parsed_document = await self._document_parser.parse(request.source)
+        source = Path(request.source) if isinstance(request.source, str) else request.source
+        parsed_document = await self._document_parser.parse(source)
 
         # Merge user-supplied metadata with the parser's authoritative
         # metadata. Keys that would shadow reserved provenance fields

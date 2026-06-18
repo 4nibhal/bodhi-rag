@@ -5,11 +5,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from typing import TextIO
+from typing import TYPE_CHECKING, TextIO
 
-from bodhi_rag.application.config import BhodiConfig
+from bodhi_rag.application.config_loader import load_bodhi_config
 from bodhi_rag.application.models import IndexDocumentRequest
 from bodhi_rag.infrastructure.container import Container
+
+if TYPE_CHECKING:
+    from bodhi_rag.application.config import BhodiConfig
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -45,13 +48,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 async def run_index(
     source: str,
+    config: BhodiConfig | None = None,
     chunk_size: int | None = None,
     overlap: int | None = None,
     metadata: dict | None = None,
 ) -> str:
     """Run index operation and return result string."""
-    config = BhodiConfig()
-    container = Container(config)
+    resolved_config = config or load_bodhi_config()
+    container = Container(resolved_config)
     app = container.build()
 
     request = IndexDocumentRequest(
@@ -74,6 +78,7 @@ async def run_index(
 def main(
     argv: list[str] | None = None,
     *,
+    config: BhodiConfig | None = None,
     stdout: TextIO | None = None,
 ) -> None:
     """CLI entry point."""
@@ -93,6 +98,7 @@ def main(
     result = asyncio.run(
         run_index(
             source=args.source,
+            config=config,
             chunk_size=args.chunk_size,
             overlap=args.overlap,
             metadata=metadata,

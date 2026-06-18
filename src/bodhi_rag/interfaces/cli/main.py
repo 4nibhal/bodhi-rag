@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from typing import TYPE_CHECKING
 
@@ -14,26 +13,22 @@ from bodhi_rag.application.config_loader import load_bodhi_config
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from bodhi_rag.application.config import BhodiConfig
 
-def _load_config_or_exit(config_path: str | Path | None) -> object | None:
+
+def _load_config_or_exit(config_path: str | Path | None) -> BhodiConfig:
     """
     Load the config via `load_bodhi_config` and exit on `ConfigError`.
 
-    Returns the loaded `BhodiConfig` (or None if `config_path` is None and
-    the env / default path is not configured). On error, prints a clear
-    message to stderr and exits with code 2.
+    Returns the loaded `BhodiConfig`. On error, exits with code 2.
     """
-    if config_path is None and "BODHI_CONFIG_PATH" not in os.environ:
-        # No config layer requested — let the subcommand build its own
-        # default `BhodiConfig()` and the caller's Container do the wiring.
-        return None
     try:
         return load_bodhi_config(config_path=config_path)
     except Exception:  # noqa: BLE001 - top-level CLI error path
         sys.exit(2)
 
 
-def _health_command() -> int:
+def _health_command(config: BhodiConfig) -> int:
     """
     Probe the live bodhi-rag-api /health endpoint and propagate its state.
 
@@ -45,13 +40,10 @@ def _health_command() -> int:
             returned an unexpected status
 
     The CLI is a client of the API, not a parallel process that
-    re-instantiates adapters. It uses BODHI_API_HOST and
-    BODHI_API_PORT (the same env vars the API server reads) to
+    re-instantiates adapters. It uses the resolved API config to
     locate the API process.
     """
-    host = os.getenv("BODHI_API_HOST", "127.0.0.1")
-    port = int(os.getenv("BODHI_API_PORT", "8000"))
-    url = f"http://{host}:{port}/health"
+    url = f"http://{config.api.host}:{config.api.port}/health"
 
     try:
         resp = httpx.get(url, timeout=2.0)
@@ -116,20 +108,20 @@ def main() -> int:
 
     # Load the TOML config (if any) up front; subcommands that need a
     # `BhodiConfig` will use it, others (like `health`) ignore it.
-    _load_config_or_exit(args.config)
+    config = _load_config_or_exit(args.config)
 
     if args.command == "index":
         from bodhi_rag.interfaces.cli.indexing import main as index_main
 
-        index_main([args.source])
+        index_main([args.source], config=config)
         return 0
     if args.command == "query":
         from bodhi_rag.interfaces.cli.query import main as query_main
 
-        query_main([args.question])
+        query_main([args.question], config=config)
         return 0
     if args.command == "health":
-        return _health_command()
+        return _health_command(config)
 
     parser.print_help()
     return 1

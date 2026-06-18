@@ -14,9 +14,9 @@ class RuntimeRegistryTest(TestCase):
         registry.reset()
         third = registry.get()
 
-        self.assertIs(first, second)
-        self.assertIsNot(first, third)
-        self.assertEqual(len(created), 2)
+        assert first is second
+        assert first is not third
+        assert len(created) == 2
 
     def test_registry_start_and_stop_are_idempotent(self) -> None:
         created = []
@@ -28,9 +28,9 @@ class RuntimeRegistryTest(TestCase):
         registry.stop()
         third = registry.start()
 
-        self.assertIs(first, second)
-        self.assertIsNot(first, third)
-        self.assertEqual(len(created), 2)
+        assert first is second
+        assert first is not third
+        assert len(created) == 2
 
 
 class ManagedResourceTest(TestCase):
@@ -48,6 +48,6 @@ class ManagedResourceTest(TestCase):
         second = resource.start()
         resource.stop()
 
-        self.assertIsNot(first, second)
-        self.assertEqual(len(created), 2)
-        self.assertEqual(stopped, [first, second])
+        assert first is not second
+        assert len(created) == 2
+        assert stopped == [first, second]
