@@ -12,9 +12,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from bodhi_rag.domain.entities import RetrievedDocument
     from bodhi_rag.ports.embedding import EmbeddingPort
     from bodhi_rag.ports.reranker import RerankerPort
-    from bodhi_rag.ports.vector_store import RetrievedDocument, VectorStorePort
+    from bodhi_rag.ports.vector_store import VectorStorePort
 
 
 class RetrieveQueryUseCase:

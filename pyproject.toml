@@ -150,11 +150,11 @@ ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107", "D203", "D212"
 # (Use of `assert` detected) is the only rule that meaningfully
 # diverges from the codebase-wide lint config for test files.
 "tests/**/*.py" = ["S101"]
-# Indexing helpers (index.py) and the langchain shim
-# (infrastructure.py) use function-local imports to break
-# circular dependency cycles between the bounded context and
-# the cross-context domain. PLC0415 is locally suppressed.
-"src/bodhi_rag/indexing/**/*.py" = ["PLC0415"]
+# Indexing application helpers (`index.py`, `delete.py`) use
+# function-local imports to break circular dependency cycles
+# between the bounded context and the cross-context domain.
+# PLC0415 is locally suppressed only for the application slice.
+"src/bodhi_rag/indexing/application/**/*.py" = ["PLC0415"]
 
 [tool.mypy]
 python_version = "3.11"

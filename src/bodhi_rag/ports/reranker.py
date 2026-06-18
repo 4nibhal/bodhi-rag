@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from bodhi_rag.ports.vector_store import RetrievedDocument
+    from bodhi_rag.domain.entities import RetrievedDocument
 
 
 @runtime_checkable

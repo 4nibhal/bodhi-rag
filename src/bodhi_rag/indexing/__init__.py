@@ -8,9 +8,6 @@ from typing import TYPE_CHECKING, Any
 __all__ = [
     "IndexDocumentsRequest",
     "IndexDocumentsResponse",
-    "IndexingSettings",
-    "load_documents_from_directory",
-    "load_documents_from_file",
 ]
 
 _EXPORTS = {
@@ -22,15 +19,6 @@ _EXPORTS = {
         "bodhi_rag.application.models",
         "IndexDocumentsResponse",
     ),
-    "IndexingSettings": ("bodhi_rag.indexing.settings", "IndexingSettings"),
-    "load_documents_from_directory": (
-        "bodhi_rag.indexing.infrastructure",
-        "load_documents_from_directory",
-    ),
-    "load_documents_from_file": (
-        "bodhi_rag.indexing.infrastructure",
-        "load_documents_from_file",
-    ),
 }
 
 if TYPE_CHECKING:
@@ -38,7 +26,6 @@ if TYPE_CHECKING:
         IndexDocumentsRequest,
         IndexDocumentsResponse,
     )
-    from bodhi_rag.indexing.settings import IndexingSettings
 
 
 def __getattr__(name: str) -> Any:
