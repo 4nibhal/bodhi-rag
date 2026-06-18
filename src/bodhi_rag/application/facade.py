@@ -25,33 +25,6 @@ if TYPE_CHECKING:
     from bodhi_rag.retrieval.application.retrieve import RetrieveQueryUseCase
 
 
-RESERVED_PROVENANCE_KEYS = frozenset(
-    {
-        "source",
-        "source_path",
-        "filename",
-        "file_type",
-        "page_count",
-        "author",
-        "title",
-        "subject",
-    },
-)
-
-
-def _merge_document_metadata(
-    parser_metadata: dict[str, Any],
-    request_metadata: dict[str, Any],
-) -> dict[str, Any]:
-    merged = dict(parser_metadata)
-    for key, value in request_metadata.items():
-        if key in RESERVED_PROVENANCE_KEYS:
-            merged[f"user_{key}"] = value
-            continue
-        merged[key] = value
-    return merged
-
-
 def _citation_source_document(retrieved_document: RetrievedDocument) -> str:
     filename = retrieved_document.metadata.get("filename")
     if isinstance(filename, str) and filename:
