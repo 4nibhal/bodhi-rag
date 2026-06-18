@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 # Core dependencies - pinned to specific stable versions
 dependencies = [
     # Web framework
-    "fastapi==0.136.3",
+    "fastapi==0.137.1",
     # starlette pinned explicitly for CVE response and reproducibility.
     # FastAPI 0.133+ supports starlette >=1.0.0; keep the pin aligned with
     # the latest audited secure 1.x release carried by this repo.
@@ -41,7 +41,7 @@ dependencies = [
     "chromadb==1.5.9",
 
     # OpenAI client
-    "openai==2.41.0",
+    "openai==2.41.1",
 
     # Evaluation
     "numpy==2.4.6",
@@ -65,7 +65,7 @@ telemetry = [
 # dep tree pulls in torch (~hundreds of MB) and most users do not need
 # the cross-encoder provider; the noop provider is the default.
 cross-encoder = [
-    "sentence-transformers==3.2.1",
+    "sentence-transformers==5.5.1",
 ]
 
 # All optional dependencies
@@ -88,10 +88,10 @@ bodhi-rag-index = "bodhi_rag.interfaces.cli.indexing:main"
 [dependency-groups]
 # Development dependencies
 dev = [
-    "pytest==9.0.3",
+    "pytest==9.1.0",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "pylint==4.0.5",
+    "pylint==4.0.6",
     "ruff==0.15.16",
     "mypy==2.1.0",
     "deptry==0.25.1",
