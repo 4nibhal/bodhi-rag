@@ -9,22 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from bodhi_rag.domain.entities import Chunk
+    from bodhi_rag.domain.entities import Chunk, RetrievedDocument
     from bodhi_rag.domain.value_objects import DocumentId
-
-
-class RetrievedDocument(Protocol):
-    """
-    A document retrieved from the vector store.
-
-    This is a protocol to avoid coupling to specific implementations.
-    """
-
-    chunk_id: str
-    document_id: str
-    text: str
-    score: float
-    metadata: dict
 
 
 class VectorStorePort(Protocol):

@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from bodhi_rag.domain.entities import RetrievedDocument
     from bodhi_rag.ports.llm import LLMMessage, LLMPort
-    from bodhi_rag.ports.vector_store import RetrievedDocument
 
 
 SYSTEM_MESSAGE = (
