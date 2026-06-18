@@ -10,7 +10,7 @@ from this top-level `__init__`.
 from bodhi_rag.ports.chunker import ChunkerPort
 from bodhi_rag.ports.document_parser import DocumentParserPort
 from bodhi_rag.ports.embedding import EmbeddingPort
-from bodhi_rag.ports.llm import LLMPort
+from bodhi_rag.ports.llm import LLMMessage, LLMPort, LLMRole
 from bodhi_rag.ports.reranker import RerankerPort
 from bodhi_rag.ports.vector_store import VectorStorePort
 
@@ -19,7 +19,9 @@ __all__ = [
     "DocumentParserPort",
     # Lower-level adapter ports
     "EmbeddingPort",
+    "LLMMessage",
     "LLMPort",
+    "LLMRole",
     "RerankerPort",
     "VectorStorePort",
 ]

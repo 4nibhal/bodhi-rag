@@ -1,7 +1,7 @@
 """
 Mock LLM adapter for testing.
 
-Returns hardcoded responses without network calls.
+Returns deterministic responses without network calls.
 """
 
 from __future__ import annotations
@@ -12,15 +12,11 @@ from bodhi_rag.infrastructure.tracing import traced
 
 if TYPE_CHECKING:
     from bodhi_rag.application.config import LLMConfig
-    from bodhi_rag.ports.vector_store import RetrievedDocument
+    from bodhi_rag.ports.llm import LLMMessage
 
 
 class MockLLMAdapter:
-    """
-    Fake LLM adapter that returns hardcoded responses.
-
-    Useful for E2E tests that don't want external API calls.
-    """
+    """Fake LLM adapter that returns deterministic responses."""
 
     def __init__(self, config: LLMConfig) -> None:
         self._config = config
@@ -28,22 +24,15 @@ class MockLLMAdapter:
     @traced("mock.llm.generate")
     async def generate(
         self,
-        _prompt: str,
+        messages: list[LLMMessage],
         **_kwargs: str | float,
     ) -> str:
-        """Return a hardcoded response."""
-        return "This is a mock response."
-
-    @traced("mock.llm.generate_with_context")
-    async def generate_with_context(
-        self,
-        query: str,
-        contexts: list[RetrievedDocument],
-        **_kwargs: str | float,
-    ) -> str:
-        """Return a mock response citing the contexts."""
-        context_count = len(contexts)
-        return (
-            f"Mock answer based on {context_count} retrieved documents. "
-            f"Query was: '{query}'"
-        )
+        """Return a mock response that includes the last user message."""
+        user_messages = [
+            message["content"]
+            for message in messages
+            if message["role"] == "user"
+        ]
+        if not user_messages:
+            return "This is a mock response."
+        return f"Mock answer: {user_messages[-1]}"

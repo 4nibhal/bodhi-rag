@@ -11,23 +11,29 @@ from typing import TYPE_CHECKING
 from bodhi_rag.infrastructure.tracing import traced
 
 if TYPE_CHECKING:
+    import httpx
+
     from bodhi_rag.application.config import LLMConfig
-    from bodhi_rag.ports.vector_store import RetrievedDocument
+    from bodhi_rag.ports.llm import LLMMessage
+
+
+def _render_messages_as_prompt(messages: list[LLMMessage]) -> str:
+    sections = [
+        f"{message['role'].capitalize()}: {message['content']}"
+        for message in messages
+    ]
+    return "\n\n".join(sections)
 
 
 class OllamaLLMAdapter:
-    """
-    Ollama adapter for local LLM generation.
-
-    Uses Ollama's REST API to generate text.
-    """
+    """Ollama adapter for local LLM generation."""
 
     DEFAULT_MODEL = "llama3.2"
     DEFAULT_BASE_URL = "http://localhost:11434"
 
     def __init__(self, config: LLMConfig) -> None:
         self._config = config
-        self._client = None
+        self._client: httpx.AsyncClient | None = None
         self._model = config.model or self.DEFAULT_MODEL
         self._base_url = config.extra.get("base_url", self.DEFAULT_BASE_URL)
 
@@ -44,20 +50,25 @@ class OllamaLLMAdapter:
     @traced("ollama.generate")
     async def generate(
         self,
-        prompt: str,
+        messages: list[LLMMessage],
         **kwargs: str | float,
     ) -> str:
-        """Generate text from a prompt using Ollama."""
+        """Generate text from message-oriented input using Ollama."""
         await self._ensure_client()
 
-        temperature = kwargs.get("temperature", 0.7)
-        max_tokens = kwargs.get("max_tokens", 2048)
+        temperature = float(kwargs.get("temperature", 0.7))
+        max_tokens = int(kwargs.get("max_tokens", 2048))
 
-        response = await self._client.post(
+        client = self._client
+        if client is None:
+            msg = "Ollama client not initialized"
+            raise RuntimeError(msg)
+
+        response = await client.post(
             "/api/generate",
             json={
                 "model": self._model,
-                "prompt": prompt,
+                "prompt": _render_messages_as_prompt(messages),
                 "stream": False,
                 "options": {
                     "temperature": temperature,
@@ -67,31 +78,12 @@ class OllamaLLMAdapter:
         )
         response.raise_for_status()
         data = response.json()
+        if not isinstance(data, dict):
+            msg = "Unexpected Ollama response payload"
+            raise TypeError(msg)
 
-        return data.get("response", "")
-
-    @traced("ollama.generate_with_context")
-    async def generate_with_context(
-        self,
-        query: str,
-        contexts: list[RetrievedDocument],
-        **kwargs: str | float,
-    ) -> str:
-        """Generate answer given a query and retrieved context."""
-        # Build context string from retrieved documents
-        context_parts = []
-        for i, doc in enumerate(contexts, 1):
-            context_parts.append(f"[Document {i}]\n{doc.text}")
-
-        context_str = "\n\n".join(context_parts)
-
-        prompt = f"""Answer the question based on the provided context.
-
-Context:
-{context_str}
-
-Question: {query}
-
-Answer:"""
-
-        return await self.generate(prompt, **kwargs)
+        result = data.get("response", "")
+        if not isinstance(result, str):
+            msg = "Unexpected Ollama response body"
+            raise TypeError(msg)
+        return result

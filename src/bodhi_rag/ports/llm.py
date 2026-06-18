@@ -1,34 +1,36 @@
 """
 LLM port definition.
 
-Defines the contract for language model adapters.
+Defines the contract for message-oriented language model adapters.
 """
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Literal, Protocol, TypedDict
 
-from bodhi_rag.ports.vector_store import RetrievedDocument
+LLMRole = Literal["system", "user", "assistant"]
+
+
+class LLMMessage(TypedDict):
+    """Single model-native message passed to an LLM adapter."""
+
+    role: LLMRole
+    content: str
 
 
 class LLMPort(Protocol):
-    """
-    Protocol for language model generation.
-
-    Adapters implementing this port handle generating
-    text responses from LLMs.
-    """
+    """Protocol for message-oriented language model generation."""
 
     async def generate(
         self,
-        prompt: str,
-        **kwargs: str | int | float,
+        messages: list[LLMMessage],
+        **kwargs: str | float,
     ) -> str:
         """
-        Generate text from a prompt.
+        Generate text from a sequence of messages.
 
         Args:
-            prompt: The prompt to generate from.
+            messages: Ordered chat messages for the target provider.
             **kwargs: Provider-specific generation parameters.
 
         Returns:
@@ -36,27 +38,6 @@ class LLMPort(Protocol):
 
         Raises:
             LLMError: If generation fails.
-        """
-        ...
 
-    async def generate_with_context(
-        self,
-        query: str,
-        contexts: list[RetrievedDocument],
-        **kwargs: str | int | float,
-    ) -> str:
-        """
-        Generate an answer given a query and retrieved context documents.
-
-        Args:
-            query: The user query.
-            contexts: Retrieved documents to use as context.
-            **kwargs: Provider-specific generation parameters.
-
-        Returns:
-            Generated answer text.
-
-        Raises:
-            LLMError: If generation fails.
         """
         ...
