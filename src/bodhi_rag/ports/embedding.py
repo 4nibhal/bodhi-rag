@@ -30,6 +30,7 @@ class EmbeddingPort(Protocol):
 
         Raises:
             EmbeddingError: If embedding generation fails.
+
         """
         ...
 
@@ -45,6 +46,7 @@ class EmbeddingPort(Protocol):
 
         Raises:
             EmbeddingError: If embedding generation fails.
+
         """
         ...
 
@@ -54,5 +56,6 @@ class EmbeddingPort(Protocol):
 
         Returns:
             Number of dimensions in each embedding vector.
+
         """
         ...

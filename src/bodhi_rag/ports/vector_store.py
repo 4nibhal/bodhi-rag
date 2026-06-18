@@ -6,10 +6,11 @@ Defines the contract for vector storage and retrieval adapters.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from bodhi_rag.domain.entities import Chunk
-from bodhi_rag.domain.value_objects import DocumentId
+if TYPE_CHECKING:
+    from bodhi_rag.domain.entities import Chunk
+    from bodhi_rag.domain.value_objects import DocumentId
 
 
 class RetrievedDocument(Protocol):
@@ -48,6 +49,7 @@ class VectorStorePort(Protocol):
 
         Raises:
             VectorStoreError: If storage fails.
+
         """
         ...
 
@@ -68,6 +70,7 @@ class VectorStorePort(Protocol):
 
         Raises:
             VectorStoreError: If search fails.
+
         """
         ...
 
@@ -80,6 +83,7 @@ class VectorStorePort(Protocol):
 
         Raises:
             VectorStoreError: If deletion fails.
+
         """
         ...
 
@@ -89,5 +93,6 @@ class VectorStorePort(Protocol):
 
         Raises:
             VectorStoreError: If persistence fails.
+
         """
         ...

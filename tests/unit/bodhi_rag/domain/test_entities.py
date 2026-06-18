@@ -1,50 +1,39 @@
 """Tests for domain entities."""
 
 import pytest
-from bodhi_rag.domain.entities import (
-    Document,
-    Query,
-    RetrievedDocument,
-    Chunk,
-    Answer,
-    ConversationTurn,
-)
-from bodhi_rag.domain.value_objects import (
-    DocumentId,
-    ChunkId,
-    ConversationId,
-    Citation,
-)
+
+from bodhi_rag.domain.entities import Answer, Chunk, ConversationTurn, Document, Query
+from bodhi_rag.domain.value_objects import ChunkId, Citation, ConversationId, DocumentId
 
 
 class TestDocument:
-    def test_create_document_with_text(self):
+    def test_create_document_with_text(self) -> None:
         doc = Document(id=DocumentId(), text="Hello world")
         assert doc.text == "Hello world"
         assert isinstance(doc.id, DocumentId)
 
-    def test_document_rejects_empty_text(self):
-        with pytest.raises(ValueError):
+    def test_document_rejects_empty_text(self) -> None:
+        with pytest.raises(ValueError, match="Document text cannot be empty"):
             Document(id=DocumentId(), text="")
 
-    def test_document_with_metadata(self):
+    def test_document_with_metadata(self) -> None:
         doc = Document(id=DocumentId(), text="Content", metadata={"source": "test.pdf"})
         assert doc.metadata["source"] == "test.pdf"
 
 
 class TestQuery:
-    def test_create_query(self):
-        q = Query(text="What is this?")
-        assert q.text == "What is this?"
-        assert q.conversation_id is None
+    def test_create_query(self) -> None:
+        query = Query(text="What is this?")
+        assert query.text == "What is this?"
+        assert query.conversation_id is None
 
-    def test_query_rejects_empty_text(self):
-        with pytest.raises(ValueError):
+    def test_query_rejects_empty_text(self) -> None:
+        with pytest.raises(ValueError, match="Query text cannot be empty"):
             Query(text="")
 
 
 class TestChunk:
-    def test_create_chunk(self):
+    def test_create_chunk(self) -> None:
         doc_id = DocumentId()
         chunk_id = ChunkId(document_id=doc_id, chunk_index=0)
         chunk = Chunk(
@@ -57,10 +46,10 @@ class TestChunk:
         assert chunk.content == "Chunk content"
         assert chunk.chunk_index == 0
 
-    def test_chunk_validates_chunk_index(self):
+    def test_chunk_validates_chunk_index(self) -> None:
         doc_id = DocumentId()
         chunk_id = ChunkId(document_id=doc_id, chunk_index=0)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="chunk_index must be non-negative"):
             Chunk(
                 id=chunk_id,
                 document_id=doc_id,
@@ -71,7 +60,7 @@ class TestChunk:
 
 
 class TestAnswer:
-    def test_create_answer_with_citations(self):
+    def test_create_answer_with_citations(self) -> None:
         doc_id = DocumentId()
         chunk_id = ChunkId(document_id=doc_id, chunk_index=0)
         citation = Citation(
@@ -88,7 +77,7 @@ class TestAnswer:
 
 
 class TestConversationTurn:
-    def test_create_conversation_turn(self):
+    def test_create_conversation_turn(self) -> None:
         conv_id = ConversationId()
         turn = ConversationTurn(
             conversation_id=conv_id,

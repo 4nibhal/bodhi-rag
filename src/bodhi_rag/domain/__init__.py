@@ -30,6 +30,7 @@ from bodhi_rag.domain.policies import (
     ContextAssemblyPolicy,
     GenerationPolicy,
     IndexingPolicy,
+    IndexingTarget,
     RetrievalPolicy,
 )
 from bodhi_rag.domain.services import (
@@ -63,6 +64,7 @@ __all__ = [
     # Services
     "IndexingDomainService",
     "IndexingPolicy",
+    "IndexingTarget",
     "PolicyViolationError",
     "Query",
     "RetrievalDomainService",

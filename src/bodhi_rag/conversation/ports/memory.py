@@ -13,10 +13,11 @@ directly from `bodhi_rag.conversation.ports.memory`.
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from bodhi_rag.domain.entities import ConversationTurn
-from bodhi_rag.domain.value_objects import ConversationId
+if TYPE_CHECKING:
+    from bodhi_rag.domain.entities import ConversationTurn
+    from bodhi_rag.domain.value_objects import ConversationId
 
 
 class ConversationMemoryPort(Protocol):

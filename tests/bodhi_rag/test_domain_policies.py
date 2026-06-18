@@ -2,166 +2,209 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from unittest import TestCase
+import pytest
 
 from bodhi_rag.domain import (
     ContextAssemblyPolicy,
     GenerationPolicy,
     IndexingPolicy,
+    IndexingTarget,
     RetrievalPolicy,
 )
 from bodhi_rag.domain.exceptions import PolicyViolationError
+from bodhi_rag.domain.services import IndexingDomainService
+
+ABS_FILE = "/workspace/test.txt"
+ABS_ALT_FILE = "/workspace/test.exe"
+ABS_DIR = "/workspace/docs"
+REL_FILE = "relative/path/file.txt"
 
 
-class RetrievalPolicyTest(TestCase):
-    def test_retrieval_policy_defaults(self) -> None:
-        policy = RetrievalPolicy()
-        self.assertEqual(policy.reranker_max_length, 512)
-        self.assertEqual(policy.document_summary_token_limit, 300)
-
-    def test_should_summarize(self) -> None:
-        policy = RetrievalPolicy(document_summary_token_limit=100)
-        self.assertFalse(policy.should_summarize(50))
-        self.assertFalse(policy.should_summarize(100))
-        self.assertTrue(policy.should_summarize(101))
-
-    def test_retrieval_policy_is_frozen(self) -> None:
-        policy = RetrievalPolicy()
-        with self.assertRaises(AttributeError):
-            policy.reranker_max_length = 1024
+def test_retrieval_policy_defaults() -> None:
+    policy = RetrievalPolicy()
+    assert policy.reranker_max_length == 512
+    assert policy.document_summary_token_limit == 300
 
 
-class GenerationPolicyTest(TestCase):
-    def test_generation_policy_defaults(self) -> None:
-        policy = GenerationPolicy()
-        self.assertEqual(policy.prompt_summary_token_limit, 1200)
-        self.assertEqual(policy.raw_summary_char_limit, 2500)
-        self.assertIsNotNone(policy.role_mapping)
-
-    def test_map_role_user(self) -> None:
-        policy = GenerationPolicy()
-        self.assertEqual(policy.map_role("question"), "user")
-        self.assertEqual(policy.map_role("human"), "user")
-        self.assertEqual(policy.map_role("user"), "user")
-
-    def test_map_role_assistant(self) -> None:
-        policy = GenerationPolicy()
-        self.assertEqual(policy.map_role("answer"), "assistant")
-        self.assertEqual(policy.map_role("assistant"), "assistant")
-        self.assertEqual(policy.map_role("ai"), "assistant")
-
-    def test_map_role_unknown_defaults_to_user(self) -> None:
-        policy = GenerationPolicy()
-        self.assertEqual(policy.map_role("unknown"), "user")
-
-    def test_should_summarize_prompt(self) -> None:
-        policy = GenerationPolicy(prompt_summary_token_limit=100)
-        self.assertFalse(policy.should_summarize_prompt(50))
-        self.assertFalse(policy.should_summarize_prompt(100))
-        self.assertTrue(policy.should_summarize_prompt(101))
-
-    def test_should_summarize_text_by_char_count(self) -> None:
-        policy = GenerationPolicy(raw_summary_char_limit=1000)
-        self.assertTrue(policy.should_summarize_text(500))
-        self.assertFalse(policy.should_summarize_text(1000))  # < not <=
-        self.assertFalse(policy.should_summarize_text(1001))
-
-    def test_generation_policy_is_frozen(self) -> None:
-        policy = GenerationPolicy()
-        with self.assertRaises(AttributeError):
-            policy.prompt_summary_token_limit = 2000
+def test_should_summarize() -> None:
+    policy = RetrievalPolicy(document_summary_token_limit=100)
+    assert not policy.should_summarize(50)
+    assert not policy.should_summarize(100)
+    assert policy.should_summarize(101)
 
 
-class ContextAssemblyPolicyTest(TestCase):
-    def test_context_assembly_policy_defaults(self) -> None:
-        policy = ContextAssemblyPolicy()
-        self.assertEqual(policy.context_token_limit, 2000)
-        self.assertEqual(policy.document_separator, "\n")
-
-    def test_compute_available_tokens(self) -> None:
-        policy = ContextAssemblyPolicy(context_token_limit=1000)
-        self.assertEqual(policy.compute_available_tokens(0), 1000)
-        self.assertEqual(policy.compute_available_tokens(300), 700)
-        self.assertEqual(policy.compute_available_tokens(1000), 0)
-        self.assertEqual(policy.compute_available_tokens(1500), 0)
-
-    def test_compute_available_tokens_custom_max(self) -> None:
-        policy = ContextAssemblyPolicy(context_token_limit=2000)
-        self.assertEqual(policy.compute_available_tokens(500, max_tokens=800), 300)
-
-    def test_should_truncate(self) -> None:
-        policy = ContextAssemblyPolicy(context_token_limit=1000)
-        self.assertFalse(policy.should_truncate(500))
-        self.assertFalse(policy.should_truncate(1000))
-        self.assertTrue(policy.should_truncate(1001))
-
-    def test_context_assembly_policy_is_frozen(self) -> None:
-        policy = ContextAssemblyPolicy()
-        with self.assertRaises(AttributeError):
-            policy.context_token_limit = 5000
+def test_retrieval_policy_is_frozen() -> None:
+    policy = RetrievalPolicy()
+    with pytest.raises(AttributeError):
+        policy.reranker_max_length = 1024
 
 
-class IndexingPolicyTest(TestCase):
-    def test_indexing_policy_defaults(self) -> None:
-        policy = IndexingPolicy()
-        self.assertIn(".txt", policy.allowed_extensions)
-        self.assertIn(".md", policy.allowed_extensions)
-        self.assertEqual(policy.max_file_size_mb, 100)
-        self.assertTrue(policy.require_absolute_path)
+def test_generation_policy_defaults() -> None:
+    policy = GenerationPolicy()
+    assert policy.prompt_summary_token_limit == 1200
+    assert policy.raw_summary_char_limit == 2500
+    assert policy.role_mapping is not None
 
-    def test_is_valid_path_with_valid_extension(self) -> None:
-        policy = IndexingPolicy(allowed_extensions=(".txt", ".md"))
-        with TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "test.txt"
-            path.touch()
-            self.assertTrue(policy.is_valid_path(str(path)))
 
-    def test_is_valid_path_with_invalid_extension(self) -> None:
-        policy = IndexingPolicy(allowed_extensions=(".txt", ".md"))
-        with TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "test.exe"
-            path.touch()
-            self.assertFalse(policy.is_valid_path(str(path)))
+def test_map_role_user() -> None:
+    policy = GenerationPolicy()
+    assert policy.map_role("question") == "user"
+    assert policy.map_role("human") == "user"
+    assert policy.map_role("user") == "user"
 
-    def test_is_valid_path_nonexistent(self) -> None:
-        policy = IndexingPolicy()
-        self.assertFalse(policy.is_valid_path("/nonexistent/path/file.txt"))
 
-    def test_is_valid_path_relative_when_required(self) -> None:
-        policy = IndexingPolicy(require_absolute_path=True)
-        self.assertFalse(policy.is_valid_path("relative/path/file.txt"))
+def test_map_role_assistant() -> None:
+    policy = GenerationPolicy()
+    assert policy.map_role("answer") == "assistant"
+    assert policy.map_role("assistant") == "assistant"
+    assert policy.map_role("ai") == "assistant"
 
-    def test_is_valid_path_relative_when_not_required(self) -> None:
-        policy = IndexingPolicy(require_absolute_path=False)
-        with TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "test.txt"
-            path.touch()
-            # Path must exist and have valid extension when relative paths allowed
-            self.assertTrue(policy.is_valid_path(str(path)))
 
-    def test_validate_file_size_within_limit(self) -> None:
-        policy = IndexingPolicy(max_file_size_mb=100)
-        with TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "test.txt"
-            path.write_text("small content")
-            self.assertTrue(policy.validate_file_size(str(path)))
+def test_map_role_unknown_defaults_to_user() -> None:
+    assert GenerationPolicy().map_role("unknown") == "user"
 
-    def test_validate_file_size_exceeds_limit(self) -> None:
-        policy = IndexingPolicy(max_file_size_mb=1)  # 1MB limit
-        with TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "test.txt"
-            # Create a file larger than 1MB (write 2MB of data)
-            path.write_bytes(b"x" * (2 * 1024 * 1024))
-            self.assertFalse(policy.validate_file_size(str(path)))
 
-    def test_validate_file_size_directory(self) -> None:
-        policy = IndexingPolicy(max_file_size_mb=1)
-        with TemporaryDirectory() as tmpdir:
-            self.assertTrue(policy.validate_file_size(tmpdir))
+def test_should_summarize_prompt() -> None:
+    policy = GenerationPolicy(prompt_summary_token_limit=100)
+    assert not policy.should_summarize_prompt(50)
+    assert not policy.should_summarize_prompt(100)
+    assert policy.should_summarize_prompt(101)
 
-    def test_indexing_policy_is_frozen(self) -> None:
-        policy = IndexingPolicy()
-        with self.assertRaises(AttributeError):
-            policy.max_file_size_mb = 200
+
+def test_should_summarize_text_by_char_count() -> None:
+    policy = GenerationPolicy(raw_summary_char_limit=1000)
+    assert policy.should_summarize_text(500)
+    assert not policy.should_summarize_text(1000)
+    assert not policy.should_summarize_text(1001)
+
+
+def test_generation_policy_is_frozen() -> None:
+    policy = GenerationPolicy()
+    with pytest.raises(AttributeError):
+        policy.prompt_summary_token_limit = 2000
+
+
+def test_context_assembly_policy_defaults() -> None:
+    policy = ContextAssemblyPolicy()
+    assert policy.context_token_limit == 2000
+    assert policy.document_separator == "\n"
+
+
+def test_compute_available_tokens() -> None:
+    policy = ContextAssemblyPolicy(context_token_limit=1000)
+    assert policy.compute_available_tokens(0) == 1000
+    assert policy.compute_available_tokens(300) == 700
+    assert policy.compute_available_tokens(1000) == 0
+    assert policy.compute_available_tokens(1500) == 0
+
+
+def test_compute_available_tokens_custom_max() -> None:
+    policy = ContextAssemblyPolicy(context_token_limit=2000)
+    assert policy.compute_available_tokens(500, max_tokens=800) == 300
+
+
+def test_should_truncate() -> None:
+    policy = ContextAssemblyPolicy(context_token_limit=1000)
+    assert not policy.should_truncate(500)
+    assert not policy.should_truncate(1000)
+    assert policy.should_truncate(1001)
+
+
+def test_context_assembly_policy_is_frozen() -> None:
+    policy = ContextAssemblyPolicy()
+    with pytest.raises(AttributeError):
+        policy.context_token_limit = 5000
+
+
+def test_indexing_policy_defaults() -> None:
+    policy = IndexingPolicy()
+    assert ".txt" in policy.allowed_extensions
+    assert ".md" in policy.allowed_extensions
+    assert policy.max_file_size_mb == 100
+    assert policy.require_absolute_path
+
+
+def test_is_valid_target_with_valid_extension() -> None:
+    policy = IndexingPolicy(allowed_extensions=(".txt", ".md"))
+    target = IndexingTarget(path=ABS_FILE, exists=True, is_dir=False, size_bytes=10)
+    assert policy.is_valid_target(target)
+
+
+def test_is_valid_target_with_invalid_extension() -> None:
+    policy = IndexingPolicy(allowed_extensions=(".txt", ".md"))
+    target = IndexingTarget(path=ABS_ALT_FILE, exists=True, is_dir=False, size_bytes=10)
+    assert not policy.is_valid_target(target)
+
+
+def test_is_valid_target_nonexistent() -> None:
+    policy = IndexingPolicy()
+    target = IndexingTarget(path="/missing/file.txt", exists=False, is_dir=False)
+    assert not policy.is_valid_target(target)
+
+
+def test_is_valid_target_relative_when_required() -> None:
+    policy = IndexingPolicy(require_absolute_path=True)
+    target = IndexingTarget(path=REL_FILE, exists=True, is_dir=False, size_bytes=10)
+    assert not policy.is_valid_target(target)
+
+
+def test_is_valid_target_relative_when_not_required() -> None:
+    policy = IndexingPolicy(require_absolute_path=False)
+    target = IndexingTarget(path=REL_FILE, exists=True, is_dir=False, size_bytes=10)
+    assert policy.is_valid_target(target)
+
+
+def test_validate_file_size_within_limit() -> None:
+    policy = IndexingPolicy(max_file_size_mb=100)
+    target = IndexingTarget(path=ABS_FILE, exists=True, is_dir=False, size_bytes=1024)
+    assert policy.validate_file_size(target)
+
+
+def test_validate_file_size_exceeds_limit() -> None:
+    policy = IndexingPolicy(max_file_size_mb=1)
+    target = IndexingTarget(
+        path=ABS_FILE,
+        exists=True,
+        is_dir=False,
+        size_bytes=2 * 1024 * 1024,
+    )
+    assert not policy.validate_file_size(target)
+
+
+def test_validate_file_size_directory() -> None:
+    policy = IndexingPolicy(max_file_size_mb=1)
+    target = IndexingTarget(path=ABS_DIR, exists=True, is_dir=True)
+    assert policy.validate_file_size(target)
+
+
+def test_validate_file_size_requires_file_metadata() -> None:
+    policy = IndexingPolicy(max_file_size_mb=1)
+    target = IndexingTarget(path=ABS_FILE, exists=True, is_dir=False)
+    with pytest.raises(ValueError, match="size_bytes"):
+        policy.validate_file_size(target)
+
+
+def test_indexing_target_rejects_invalid_directory_metadata() -> None:
+    with pytest.raises(ValueError, match="must not include a file size"):
+        IndexingTarget(path=ABS_DIR, exists=True, is_dir=True, size_bytes=10)
+
+
+def test_indexing_policy_is_frozen() -> None:
+    policy = IndexingPolicy()
+    with pytest.raises(AttributeError):
+        policy.max_file_size_mb = 200
+
+
+def test_validate_index_request_raises_for_invalid_target() -> None:
+    service = IndexingDomainService(IndexingPolicy(allowed_extensions=(".txt",)))
+    target = IndexingTarget(path=ABS_ALT_FILE, exists=True, is_dir=False, size_bytes=10)
+
+    with pytest.raises(PolicyViolationError):
+        service.validate_index_request(target)
+
+
+def test_validate_index_request_accepts_valid_target() -> None:
+    service = IndexingDomainService(IndexingPolicy(allowed_extensions=(".txt",)))
+    target = IndexingTarget(path=ABS_FILE, exists=True, is_dir=False, size_bytes=10)
+
+    service.validate_index_request(target)
