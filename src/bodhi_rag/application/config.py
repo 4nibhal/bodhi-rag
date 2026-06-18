@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import os
 import tomllib
-from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Mapping
 
 
 class ConfigError(ValueError):
@@ -212,6 +211,95 @@ class TelemetryConfig(BaseModel):
     )
 
 
+class ApiConfig(BaseModel):
+    """API transport configuration."""
+
+    host: str = Field(default="127.0.0.1", description="API bind host")
+    port: int = Field(default=8000, ge=1, le=65535, description="API bind port")
+    source_root: Path | None = Field(
+        default=None,
+        description="Optional local-source root enforced by the API indexing endpoint",
+    )
+
+
+def _config_section_map() -> dict[str, tuple[type[BaseModel], dict[str, str]]]:
+    return {
+        "parser": (DocumentParserConfig, {"BODHI_PARSER_PROVIDER": "provider"}),
+        "chunker": (
+            ChunkerConfig,
+            {
+                "BODHI_CHUNKER_PROVIDER": "provider",
+                "BODHI_CHUNKER_CHUNK_SIZE": "chunk_size",
+                "BODHI_CHUNKER_OVERLAP": "overlap",
+            },
+        ),
+        "embedding": (
+            EmbeddingConfig,
+            {
+                "BODHI_EMBEDDING_PROVIDER": "provider",
+                "BODHI_EMBEDDING_MODEL": "model",
+            },
+        ),
+        "vector_store": (
+            VectorStoreConfig,
+            {
+                "BODHI_VECTOR_STORE_PROVIDER": "provider",
+                "BODHI_INDEX_PERSIST_DIRECTORY": "persist_directory",
+            },
+        ),
+        "llm": (
+            LLMConfig,
+            {
+                "BODHI_LLM_PROVIDER": "provider",
+                "BODHI_LLM_MODEL": "model",
+            },
+        ),
+        "conversation": (
+            ConversationConfig,
+            {"BODHI_CONVERSATION_PROVIDER": "provider"},
+        ),
+        "reranker": (
+            RerankerConfig,
+            {
+                "BODHI_RERANKER_PROVIDER": "provider",
+                "BODHI_RERANKER_MODEL": "model",
+            },
+        ),
+        "telemetry": (TelemetryConfig, {}),
+        "api": (
+            ApiConfig,
+            {
+                "BODHI_API_HOST": "host",
+                "BODHI_API_PORT": "port",
+                "BODHI_API_SOURCE_ROOT": "source_root",
+            },
+        ),
+    }
+
+
+def _resolve_section_kwargs(
+    data: Mapping[str, Any], env: Mapping[str, str] | None,
+) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    for section, (model_cls, env_map) in _config_section_map().items():
+        section_data: dict[str, Any] = {}
+        raw_section = data.get(section)
+        if isinstance(raw_section, dict):
+            section_data.update(raw_section)
+        if env is not None:
+            for env_key, field_name in env_map.items():
+                if env_key in env:
+                    section_data[field_name] = env[env_key]
+        if not section_data:
+            continue
+        try:
+            kwargs[section] = model_cls.model_validate(section_data)
+        except Exception as exc:
+            msg = f"Invalid [{section}] configuration: {exc}"
+            raise ConfigError(msg) from exc
+    return kwargs
+
+
 class BhodiConfig(BaseModel):
     """
     Root configuration for bodhi-rag platform.
@@ -220,42 +308,28 @@ class BhodiConfig(BaseModel):
     """
 
     parser: DocumentParserConfig = Field(
-        default_factory=lambda: DocumentParserConfig(
-            provider=os.getenv("BODHI_PARSER_PROVIDER", "pypdf"),
-        ),
+        default_factory=lambda: DocumentParserConfig(provider="pypdf"),
     )
     chunker: ChunkerConfig = Field(
-        default_factory=lambda: ChunkerConfig(
-            provider=os.getenv("BODHI_CHUNKER_PROVIDER", "recursive"),
-        ),
+        default_factory=lambda: ChunkerConfig(provider="recursive"),
     )
     embedding: EmbeddingConfig = Field(
-        default_factory=lambda: EmbeddingConfig(
-            provider=os.getenv("BODHI_EMBEDDING_PROVIDER", "openai"),
-        ),
+        default_factory=lambda: EmbeddingConfig(provider="openai"),
     )
     vector_store: VectorStoreConfig = Field(
-        default_factory=lambda: VectorStoreConfig(
-            provider=os.getenv("BODHI_VECTOR_STORE_PROVIDER", "chroma"),
-        ),
+        default_factory=lambda: VectorStoreConfig(provider="chroma"),
     )
     llm: LLMConfig = Field(
-        default_factory=lambda: LLMConfig(
-            provider=os.getenv("BODHI_LLM_PROVIDER", "openai"),
-        ),
+        default_factory=lambda: LLMConfig(provider="openai"),
     )
     conversation: ConversationConfig = Field(
-        default_factory=lambda: ConversationConfig(
-            provider=os.getenv("BODHI_CONVERSATION_PROVIDER", "volatile"),
-        ),
+        default_factory=lambda: ConversationConfig(provider="volatile"),
     )
     reranker: RerankerConfig = Field(
-        default_factory=lambda: RerankerConfig(
-            provider=os.getenv("BODHI_RERANKER_PROVIDER", "noop"),  # type: ignore[arg-type]
-            model=os.getenv("BODHI_RERANKER_MODEL"),
-        ),
+        default_factory=RerankerConfig,
     )
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
+    api: ApiConfig = Field(default_factory=ApiConfig)
 
     model_config = ConfigDict(
         extra="ignore",  # Allow extra fields in config files without failing
@@ -271,14 +345,8 @@ class BhodiConfig(BaseModel):
         only the documented `BODHI_*` (and the API-layer `BODHI_API_*`)
         variables are consumed.
         """
-        # Pydantic default_factory lambdas already read from os.getenv. The
-        # explicit constructor here ensures that a custom `env` mapping is
-        # honored — we temporarily patch os.environ for the duration of the
-        # call so the default factories see the caller-provided values.
-        if env is None:
-            return cls()
-        with _patched_environ(env):
-            return cls()
+        env_data = env if env is not None else os.environ
+        return cls(**_resolve_section_kwargs(cls().model_dump(mode="python"), env_data))
 
     @classmethod
     def from_toml(
@@ -316,95 +384,10 @@ class BhodiConfig(BaseModel):
             msg = f"Malformed TOML in {path}: {exc}"
             raise ConfigError(msg) from exc
 
-        # Mapping from TOML section name to a (sub-config class, env-field map)
-        # where env-field map is {env var name: field name on the sub-config}.
-        section_map: dict[str, tuple[type[BaseModel], dict[str, str]]] = {
-            "parser": (DocumentParserConfig, {"BODHI_PARSER_PROVIDER": "provider"}),
-            "chunker": (
-                ChunkerConfig,
-                {"BODHI_CHUNKER_PROVIDER": "provider"},
-            ),
-            "embedding": (
-                EmbeddingConfig,
-                {
-                    "BODHI_EMBEDDING_PROVIDER": "provider",
-                    "BODHI_EMBEDDING_MODEL": "model",
-                },
-            ),
-            "vector_store": (
-                VectorStoreConfig,
-                {"BODHI_VECTOR_STORE_PROVIDER": "provider"},
-            ),
-            "llm": (
-                LLMConfig,
-                {
-                    "BODHI_LLM_PROVIDER": "provider",
-                    "BODHI_LLM_MODEL": "model",
-                },
-            ),
-            "conversation": (
-                ConversationConfig,
-                {"BODHI_CONVERSATION_PROVIDER": "provider"},
-            ),
-            "reranker": (
-                RerankerConfig,
-                {
-                    "BODHI_RERANKER_PROVIDER": "provider",
-                    "BODHI_RERANKER_MODEL": "model",
-                },
-            ),
-            "telemetry": (TelemetryConfig, {}),
-        }
-
-        kwargs: dict[str, Any] = {}
-        for section, (model_cls, env_map) in section_map.items():
-            section_data: dict[str, Any] = {}
-            if section in data and isinstance(data[section], dict):
-                section_data.update(data[section])
-            # Apply env overlay: env beats TOML.
-            if env is not None:
-                for env_key, field_name in env_map.items():
-                    if env_key in env:
-                        section_data[field_name] = env[env_key]
-            if not section_data:
-                continue
-            # Even with only env, the sub-config must validate cleanly.
-            try:
-                kwargs[section] = model_cls.model_validate(section_data)
-            except Exception as exc:
-                msg = f"Invalid [{section}] section in {path}: {exc}"
-                raise ConfigError(msg) from exc
-
-        # Apply env to any top-level defaults not covered by sections above.
-        # Specifically: the `BhodiConfig` default_factory lambdas read
-        # BODHI_*_PROVIDER env vars, but since we are now passing explicit
-        # sub-configs, we must apply the env ourselves to honour the
-        # "env beats TOML" contract for fields not present in the TOML.
-        if env is not None:
-            with _patched_environ(env):
-                return cls(**kwargs)
-        return cls(**kwargs)
-
-
-@contextmanager
-def _patched_environ(env: Mapping[str, str]) -> Iterator[None]:
-    """
-    Context manager: temporarily replace os.environ with the given mapping.
-
-    Used so that `BhodiConfig` default_factory lambdas (which call
-    `os.getenv`) honor a caller-provided env mapping without mutating
-    the real process environment.
-    """
-    sentinel = object()
-    saved = {k: os.environ.get(k, sentinel) for k in env}
-    try:
-        os.environ.clear()
-        os.environ.update(env)
-        yield
-    finally:
-        os.environ.clear()
-        for k, v in saved.items():
-            if v is sentinel:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
+        merged_data = cls().model_dump(mode="python")
+        merged_data.update({key: value for key, value in data.items() if isinstance(value, dict)})
+        try:
+            return cls(**_resolve_section_kwargs(merged_data, env))
+        except ConfigError as exc:
+            msg = f"Invalid config data loaded from {path}: {exc}"
+            raise ConfigError(msg) from exc

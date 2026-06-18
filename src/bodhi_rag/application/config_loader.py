@@ -25,6 +25,8 @@ import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel
+
 from bodhi_rag.application.config import (
     BhodiConfig,
     ChunkerConfig,
@@ -42,6 +44,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 __all__ = ["load_bodhi_config"]
+
+
+ConfigSectionModel = type[BaseModel]
 
 
 def _resolve_config_path(
@@ -94,23 +99,20 @@ def _apply_cli_overrides(
         return base
 
     # Map of section name -> sub-config class, mirroring BhodiConfig.from_toml.
-    section_classes: dict[str, type] = {}
+    section_classes: dict[str, ConfigSectionModel] = {}
     for field_name in BhodiConfig.model_fields:
         existing = getattr(base, field_name, None)
         if existing is not None:
             section_classes[field_name] = type(existing)
     # Make sure all known sub-configs are present even if base is partial.
-    for cls in (
-        DocumentParserConfig,
-        ChunkerConfig,
-        EmbeddingConfig,
-        VectorStoreConfig,
-        LLMConfig,
-        ConversationConfig,
-        RerankerConfig,
-        TelemetryConfig,
-    ):
-        section_classes.setdefault(cls.__name__, cls)
+    section_classes.setdefault("parser", DocumentParserConfig)
+    section_classes.setdefault("chunker", ChunkerConfig)
+    section_classes.setdefault("embedding", EmbeddingConfig)
+    section_classes.setdefault("vector_store", VectorStoreConfig)
+    section_classes.setdefault("llm", LLMConfig)
+    section_classes.setdefault("conversation", ConversationConfig)
+    section_classes.setdefault("reranker", RerankerConfig)
+    section_classes.setdefault("telemetry", TelemetryConfig)
 
     new_kwargs: dict[str, Any] = {}
     for section, fields in cli_overrides.items():
