@@ -17,13 +17,20 @@ Dependencies:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Protocol, cast
 
 from bodhi_rag.application.config import ConfigError, RerankerConfig
 from bodhi_rag.domain.entities import RetrievedDocument
 
-if TYPE_CHECKING:
-    from sentence_transformers import CrossEncoder
+
+class _CrossEncoderProtocol(Protocol):
+    def predict(
+        self,
+        pairs: list[tuple[str, str]],
+        *,
+        batch_size: int,
+        show_progress_bar: bool,
+    ) -> list[float]: ...
 
 
 _OPTIONAL_EXTRA_HINT = (
@@ -60,25 +67,25 @@ class CrossEncoderReranker:
         self._model_name = config.model.strip()
         self._batch_size = config.batch_size
         self._overfetch_factor = config.overfetch_factor
-        self._encoder: CrossEncoder | None = None
+        self._encoder: _CrossEncoderProtocol | None = None
 
     @property
     def overfetch_factor(self) -> int:
         """Return the configured overfetch factor for the query pipeline."""
         return self._overfetch_factor
 
-    def _ensure_encoder(self) -> CrossEncoder:
+    def _ensure_encoder(self) -> _CrossEncoderProtocol:
         """Lazily import and instantiate the CrossEncoder on first use."""
         if self._encoder is None:
             try:
-                from sentence_transformers import CrossEncoder
+                from sentence_transformers import CrossEncoder  # type: ignore[import-not-found]
             except ImportError as exc:
                 msg = (
                     "CrossEncoderReranker requires the `sentence-transformers` "
                     "package. " + _OPTIONAL_EXTRA_HINT
                 )
                 raise ConfigError(msg) from exc
-            self._encoder = CrossEncoder(self._model_name)
+            self._encoder = cast("_CrossEncoderProtocol", CrossEncoder(self._model_name))
         return self._encoder
 
     async def rerank(
@@ -104,7 +111,7 @@ class CrossEncoderReranker:
 
         encoder = self._ensure_encoder()
         pairs = [(query, chunk.text) for chunk in chunks]
-        scores: list[float] = encoder.predict(  # type: ignore[attr-defined]
+        scores = encoder.predict(
             pairs,
             batch_size=self._batch_size,
             show_progress_bar=False,

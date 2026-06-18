@@ -23,7 +23,9 @@ def safe(raw_collection: MagicMock) -> SafeChromaCollection:
 
 class TestAddEnforcesPrecomputedEmbeddings:
     def test_passes_through_when_embeddings_provided(
-        self, safe: SafeChromaCollection, raw_collection: MagicMock
+        self,
+        safe: SafeChromaCollection,
+        raw_collection: MagicMock,
     ) -> None:
         safe.add(
             ids=["1"],
@@ -58,10 +60,15 @@ class TestAddEnforcesPrecomputedEmbeddings:
 
 class TestQueryEnforcesPrecomputedEmbeddings:
     def test_passes_through_when_query_embeddings_provided(
-        self, safe: SafeChromaCollection, raw_collection: MagicMock
+        self,
+        safe: SafeChromaCollection,
+        raw_collection: MagicMock,
     ) -> None:
         safe.query(query_embeddings=[[0.1, 0.2]], n_results=5)
-        raw_collection.query.assert_called_once_with(query_embeddings=[[0.1, 0.2]], n_results=5)
+        raw_collection.query.assert_called_once_with(
+            query_embeddings=[[0.1, 0.2]],
+            n_results=5,
+        )
 
     def test_rejects_none_query_embeddings(self, safe: SafeChromaCollection) -> None:
         with pytest.raises(ValueError, match="must be pre-computed"):
@@ -74,13 +81,17 @@ class TestQueryEnforcesPrecomputedEmbeddings:
 
 class TestGetAndDeleteAreTransparent:
     def test_get_passes_through(
-        self, safe: SafeChromaCollection, raw_collection: MagicMock
+        self,
+        safe: SafeChromaCollection,
+        raw_collection: MagicMock,
     ) -> None:
         safe.get(where={"k": "v"})
         raw_collection.get.assert_called_once_with(where={"k": "v"})
 
     def test_delete_passes_through(
-        self, safe: SafeChromaCollection, raw_collection: MagicMock
+        self,
+        safe: SafeChromaCollection,
+        raw_collection: MagicMock,
     ) -> None:
         safe.delete(ids=["1", "2"])
         raw_collection.delete.assert_called_once_with(ids=["1", "2"])
@@ -99,13 +110,16 @@ class TestOnlyAllowedMethodsAreExposed:
         ],
     )
     def test_unknown_method_raises_attribute_error(
-        self, safe: SafeChromaCollection, name: str
+        self,
+        safe: SafeChromaCollection,
+        name: str,
     ) -> None:
         with pytest.raises(AttributeError, match="does not expose"):
             getattr(safe, name)()
 
     def test_allowed_methods_constant_is_audited_set(self) -> None:
-        """The allowlist must not change without security review.
+        """
+        The allowlist must not change without security review.
 
         Each method in `_ALLOWED_METHODS` was individually audited for
         its interaction with the chromadb embedding deserialization
@@ -129,4 +143,7 @@ class TestOnlyAllowedMethodsAreExposed:
         embedding kwargs the new method accepts, (3) a security
         review of the new method's interaction with the sink.
         """
-        assert SafeChromaCollection._ALLOWED_METHODS == frozenset({"add", "query", "get", "delete"})
+        assert frozenset({"add", "query", "get", "delete"}) == type.__getattribute__(
+            SafeChromaCollection,
+            "_ALLOWED_METHODS",
+        )

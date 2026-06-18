@@ -61,6 +61,11 @@ class ChromaVectorStoreAdapter:
         """Add chunks with embeddings to Chroma."""
         await self._ensure_client()
 
+        collection = self._collection
+        if collection is None:
+            msg = "Chroma collection not initialized"
+            raise RuntimeError(msg)
+
         ids = [str(chunk.id) for chunk in chunks]
         documents = [chunk.content for chunk in chunks]
         metadatas = [
@@ -73,7 +78,7 @@ class ChromaVectorStoreAdapter:
         ]
 
         await asyncio.to_thread(
-            self._collection.add,
+            collection.add,
             ids=ids,
             embeddings=embeddings,
             documents=documents,
@@ -88,8 +93,13 @@ class ChromaVectorStoreAdapter:
         """Search for similar chunks."""
         await self._ensure_client()
 
+        collection = self._collection
+        if collection is None:
+            msg = "Chroma collection not initialized"
+            raise RuntimeError(msg)
+
         results = await asyncio.to_thread(
-            self._collection.query,
+            collection.query,
             query_embeddings=[query_embedding],
             n_results=top_k,
         )
@@ -131,8 +141,13 @@ class ChromaVectorStoreAdapter:
         await self._ensure_client()
 
         # Query to find all chunks for this document
+        collection = self._collection
+        if collection is None:
+            msg = "Chroma collection not initialized"
+            raise RuntimeError(msg)
+
         result = await asyncio.to_thread(
-            self._collection.get,
+            collection.get,
             where={"document_id": str(document_id)},
         )
 
@@ -140,7 +155,7 @@ class ChromaVectorStoreAdapter:
         if not ids:
             raise DocumentNotFoundError(str(document_id))
 
-        await asyncio.to_thread(self._collection.delete, ids=ids)
+        await asyncio.to_thread(collection.delete, ids=ids)
 
     async def persist(self) -> None:
         """Chroma persists automatically with PersistentClient."""

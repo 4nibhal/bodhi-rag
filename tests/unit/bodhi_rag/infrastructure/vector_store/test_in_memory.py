@@ -11,7 +11,7 @@ from bodhi_rag.infrastructure.vector_store.in_memory import MockVectorStoreAdapt
 
 
 @pytest.mark.asyncio
-async def test_delete_raises_not_found_for_missing_document():
+async def test_delete_raises_not_found_for_missing_document() -> None:
     """Deleting a missing document should raise DocumentNotFoundError."""
     adapter = MockVectorStoreAdapter(VectorStoreConfig(provider="in_memory"))
 

@@ -30,9 +30,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
-
 CHROMA_ADAPTER_PATH = (
     Path(__file__).resolve().parents[2]
     / "src"
@@ -42,9 +39,6 @@ CHROMA_ADAPTER_PATH = (
     / "chroma.py"
 )
 
-# Methods on a chromadb collection that, when called WITHOUT pre-computed
-# embeddings, trigger the client-side deserialization sink at
-# `chromadb/api/collection_configuration.py:73-91`.
 METHODS_REQUIRING_PRECOMPUTED_EMBEDDINGS: dict[str, str] = {
     "add": "embeddings",
     "query": "query_embeddings",
@@ -53,22 +47,23 @@ METHODS_REQUIRING_PRECOMPUTED_EMBEDDINGS: dict[str, str] = {
 }
 
 
+def _is_collection_target(node: ast.AST) -> bool:
+    if isinstance(node, ast.Attribute):
+        return (
+            isinstance(node.value, ast.Name)
+            and node.value.id == "self"
+            and node.attr == "_collection"
+        )
+    return isinstance(node, ast.Name) and node.id == "collection"
+
+
 def _iter_collection_method_calls(tree: ast.AST) -> list[tuple[str, ast.Call]]:
-    """Yield (method_name, Call node) for every invocation of a `_collection` method.
+    """
+    Yield (method_name, Call node) for every invocation of a collection method.
 
-    Handles two equivalent patterns used in the adapter:
-
-    1. Direct call: ``self._collection.<method>(...)`` -- the Call node IS
-       the call to the collection method and its kwargs are the kwargs
-       that reach the chromadb API.
-
-    2. Function reference: ``asyncio.to_thread(self._collection.<method>, ...)``
-       -- the collection method is passed by reference as the first
-       positional argument to ``asyncio.to_thread``, and the kwargs of
-       the ``to_thread`` call are the kwargs that reach the chromadb API.
-       We yield the ``to_thread`` Call node in this case so that
-       ``_kwargs_of`` reads the same kwargs that the runtime passes to
-       the underlying collection method.
+    Handles both direct calls and `asyncio.to_thread(...)` call-by-reference
+    patterns, whether the adapter uses `self._collection` inline or first binds
+    it to a local `collection` variable.
     """
     results: list[tuple[str, ast.Call]] = []
     for node in ast.walk(tree):
@@ -78,28 +73,21 @@ def _iter_collection_method_calls(tree: ast.AST) -> list[tuple[str, ast.Call]]:
         if not isinstance(func, ast.Attribute):
             continue
 
-        # Pattern 1: self._collection.<method>(...)
-        if isinstance(func.value, ast.Attribute) and func.value.attr == "_collection":
-            if isinstance(func.value.value, ast.Name) and func.value.value.id == "self":
-                results.append((func.attr, node))
+        if _is_collection_target(func.value):
+            results.append((func.attr, node))
             continue
 
-        # Pattern 2: asyncio.to_thread(self._collection.<method>, **kwargs)
-        if func.attr == "to_thread" and isinstance(func.value, ast.Name) and func.value.id == "asyncio":
+        if (
+            func.attr == "to_thread"
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "asyncio"
+        ):
             if not node.args:
                 continue
             first_arg = node.args[0]
             if not isinstance(first_arg, ast.Attribute):
                 continue
-            if not (
-                isinstance(first_arg.value, ast.Attribute)
-                and first_arg.value.attr == "_collection"
-            ):
-                continue
-            if not (
-                isinstance(first_arg.value.value, ast.Name)
-                and first_arg.value.value.id == "self"
-            ):
+            if not _is_collection_target(first_arg.value):
                 continue
             results.append((first_arg.attr, node))
     return results
@@ -110,7 +98,7 @@ def _kwargs_of(call: ast.Call) -> dict[str, ast.AST]:
 
 
 def test_chroma_adapter_always_passes_precomputed_embeddings() -> None:
-    """Every `self._collection.{add,query,update,upsert}(...)` call must pass pre-computed embeddings."""
+    """Every relevant collection call must pass pre-computed embeddings."""
     assert CHROMA_ADAPTER_PATH.exists(), (
         f"Expected chroma adapter at {CHROMA_ADAPTER_PATH}, but the file is missing."
     )
@@ -129,25 +117,23 @@ def test_chroma_adapter_always_passes_precomputed_embeddings() -> None:
 
         if kwarg_name not in kwargs:
             violations.append(
-                f"Line {line}: `self._collection.{method}(...)` is missing "
-                f"`{kwarg_name}=` kwarg. This would re-activate the client-side "
-                f"vulnerability path of CVE-2026-45829 (the call would fall through "
-                f"to `CollectionCommon._embed`, which instantiates the embedding "
-                f"function from the stored configuration)."
+                f"Line {line}: collection.{method}(...) is missing `{kwarg_name}=`. "
+                "This would re-activate the client-side vulnerability path of "
+                "CVE-2026-45829.",
             )
             continue
         if isinstance(kwargs[kwarg_name], ast.Constant) and kwargs[kwarg_name].value is None:
             violations.append(
-                f"Line {line}: `self._collection.{method}(..., {kwarg_name}=None, ...)` "
-                f"passes None. This would re-activate the client-side "
-                f"vulnerability path of CVE-2026-45829."
+                f"Line {line}: collection.{method}(..., {kwarg_name}=None, ...) passes "
+                "None. This would re-activate the client-side vulnerability path of "
+                "CVE-2026-45829.",
             )
             continue
         checked.append((method, kwarg_name, line))
 
     assert not violations, "\n".join(violations)
     assert checked, (
-        "No `self._collection.add/query/update/upsert` calls were found in "
-        "chroma.py. If the adapter was rewritten, update this test to track the "
-        "new call sites or remove it if the vulnerability is no longer relevant."
+        "No collection add/query/update/upsert calls were found in chroma.py. "
+        "If the adapter was rewritten, update this test to track the new call "
+        "sites or remove it if the vulnerability is no longer relevant."
     )
