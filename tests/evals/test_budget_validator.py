@@ -38,8 +38,8 @@ class BudgetValidatorRetrievalTest(TestCase):
             ),
         )
         passes, failures = self.validator.validate_retrieval(score, thresholds)
-        self.assertTrue(passes)
-        self.assertEqual(failures, [])
+        assert passes
+        assert failures == []
 
     def test_validate_retrieval_fails_low_hit_rate(self) -> None:
         thresholds = RetrievalThresholds(
@@ -63,9 +63,9 @@ class BudgetValidatorRetrievalTest(TestCase):
             ),
         )
         passes, failures = self.validator.validate_retrieval(score, thresholds)
-        self.assertFalse(passes)
-        self.assertEqual(len(failures), 1)
-        self.assertIn("hit_rate", failures[0])
+        assert not passes
+        assert len(failures) == 1
+        assert "hit_rate" in failures[0]
 
     def test_validate_retrieval_fails_pollution(self) -> None:
         thresholds = RetrievalThresholds(
@@ -89,8 +89,8 @@ class BudgetValidatorRetrievalTest(TestCase):
             ),
         )
         passes, failures = self.validator.validate_retrieval(score, thresholds)
-        self.assertFalse(passes)
-        self.assertEqual(len(failures), 2)  # pollution and memory_leak both fail
+        assert not passes
+        assert len(failures) == 2  # pollution and memory_leak both fail
 
     def test_validate_retrieval_empty_suite(self) -> None:
         thresholds = RetrievalThresholds(0.5, 0.0, 0.0)
@@ -100,8 +100,8 @@ class BudgetValidatorRetrievalTest(TestCase):
             pollution_free_cases=0,
             case_scores=(),
         )
-        passes, failures = self.validator.validate_retrieval(score, thresholds)
-        self.assertFalse(passes)  # 0/0 = 0.0, which fails hit_rate_min threshold
+        passes, _failures = self.validator.validate_retrieval(score, thresholds)
+        assert not passes  # 0/0 = 0.0, which fails hit_rate_min threshold
 
 
 class BudgetValidatorGroundingTest(TestCase):
@@ -128,8 +128,8 @@ class BudgetValidatorGroundingTest(TestCase):
             ),
         )
         passes, failures = self.validator.validate_grounding(score, thresholds)
-        self.assertTrue(passes)
-        self.assertEqual(failures, [])
+        assert passes
+        assert failures == []
 
     def test_validate_grounding_fails_low_recall(self) -> None:
         thresholds = GroundingThresholds(
@@ -151,9 +151,9 @@ class BudgetValidatorGroundingTest(TestCase):
             ),
         )
         passes, failures = self.validator.validate_grounding(score, thresholds)
-        self.assertFalse(passes)
-        self.assertEqual(len(failures), 1)
-        self.assertIn("supported_fact_recall", failures[0])
+        assert not passes
+        assert len(failures) == 1
+        assert "supported_fact_recall" in failures[0]
 
     def test_validate_grounding_fails_unsupported_claims(self) -> None:
         thresholds = GroundingThresholds(
@@ -175,9 +175,9 @@ class BudgetValidatorGroundingTest(TestCase):
             ),
         )
         passes, failures = self.validator.validate_grounding(score, thresholds)
-        self.assertFalse(passes)
-        self.assertEqual(len(failures), 1)
-        self.assertIn("unsupported_claim_rate", failures[0])
+        assert not passes
+        assert len(failures) == 1
+        assert "unsupported_claim_rate" in failures[0]
 
 
 class BudgetValidatorFullBudgetTest(TestCase):
@@ -223,11 +223,11 @@ class BudgetValidatorFullBudgetTest(TestCase):
             ),
         )
         passes, details = self.validator.validate_budget(
-            budget, (retrieval_score, grounding_score)
+            budget, (retrieval_score, grounding_score),
         )
-        self.assertTrue(passes)
-        self.assertTrue(details["retrieval_passes"])
-        self.assertTrue(details["grounding_passes"])
+        assert passes
+        assert details["retrieval_passes"]
+        assert details["grounding_passes"]
 
     def test_validate_budget_partial_failure(self) -> None:
         retrieval_thresholds = RetrievalThresholds(0.5, 0.0, 0.0)
@@ -268,8 +268,8 @@ class BudgetValidatorFullBudgetTest(TestCase):
             ),
         )
         passes, details = self.validator.validate_budget(
-            budget, (retrieval_score, grounding_score)
+            budget, (retrieval_score, grounding_score),
         )
-        self.assertFalse(passes)
-        self.assertTrue(details["retrieval_passes"])
-        self.assertFalse(details["grounding_passes"])
+        assert not passes
+        assert details["retrieval_passes"]
+        assert not details["grounding_passes"]

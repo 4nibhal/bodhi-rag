@@ -7,7 +7,6 @@ assistant_logs.txt
 src/bhodi_doc_analyzer.egg-info/
 
 # Python/uv
-uv.lock
 src/*.egg-info/
 
 # Local bodhi-rag config (use bodhi.toml.example as a template)

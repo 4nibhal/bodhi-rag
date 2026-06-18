@@ -19,21 +19,21 @@ class EvaluationScoringTest(TestCase):
                         document_id="policy-release-validation",
                         origin="corpus",
                         source="docs/policy.md",
-                    )
+                    ),
                 ],
                 "conversation-recall": [
                     RetrievedArtifact(
                         document_id="conversation-turn-1",
                         origin="conversation",
                         source="memory://conversation-turn-1",
-                    )
+                    ),
                 ],
             },
         )
 
-        self.assertEqual(score.total_cases, 2)
-        self.assertEqual(score.hit_cases, 2)
-        self.assertEqual(score.pollution_free_cases, 2)
+        assert score.total_cases == 2
+        assert score.hit_cases == 2
+        assert score.pollution_free_cases == 2
 
     def test_grounding_suite_reports_missing_support_and_bad_citations(self) -> None:
         fixture = load_fixture()
@@ -45,7 +45,7 @@ class EvaluationScoringTest(TestCase):
                         document_id="policy-release-validation",
                         origin="corpus",
                         source="docs/policy.md",
-                    )
+                    ),
                 ],
                 "conversation-recall": [],
             },
@@ -55,9 +55,9 @@ class EvaluationScoringTest(TestCase):
             },
         )
 
-        self.assertEqual(score.total_cases, 2)
-        self.assertEqual(score.grounded_cases, 1)
+        assert score.total_cases == 2
+        assert score.grounded_cases == 1
         failed_case = score.case_scores[1]
-        self.assertFalse(failed_case.grounded)
-        self.assertEqual(failed_case.missing_sources, ("memory://conversation-turn-1",))
-        self.assertEqual(failed_case.unsupported_citations, ("memory://wrong",))
+        assert not failed_case.grounded
+        assert failed_case.missing_sources == ("memory://conversation-turn-1",)
+        assert failed_case.unsupported_citations == ("memory://wrong",)
