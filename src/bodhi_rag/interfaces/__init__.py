@@ -1,3 +1,3 @@
 """Interface adapters for bodhi-rag platform entrypoints."""
 
-__all__ = ["api", "cli", "tui", "worker"]
+__all__ = ["api", "cli"]
