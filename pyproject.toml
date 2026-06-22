@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 # Core dependencies - pinned to specific stable versions
 dependencies = [
     # Web framework
-    "fastapi==0.137.1",
+    "fastapi==0.138.0",
     # starlette pinned explicitly for CVE response and reproducibility.
     # FastAPI 0.133+ supports starlette >=1.0.0; keep the pin aligned with
     # the latest audited secure 1.x release carried by this repo.
