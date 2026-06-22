@@ -23,7 +23,7 @@ dependencies = [
     "pydantic==2.13.4",
 
     # Document parsing
-    "pypdf==6.13.1",
+    "pypdf==6.13.3",
 
     # HTTP client
     "httpx==0.28.1",
