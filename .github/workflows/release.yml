@@ -70,7 +70,7 @@ jobs:
           "$smoke_dir/bin/bodhi-rag-index" --help
 
       - name: Publish artifacts to GitHub release
-        uses: softprops/action-gh-release@01570a1f39cb168c169c802c3bceb9e93fb10974  # v2.1.0
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
         with:
           files: |
             dist/*.tar.gz
